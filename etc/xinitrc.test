@@ -1,0 +1,4 @@
+export PYTHONPATH=.
+
+./bin/footwm &
+xterm

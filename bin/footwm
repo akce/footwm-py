@@ -1,0 +1,8 @@
+#! /usr/bin/env python3
+#
+# FootWM run script.
+#
+
+from footwm import footwm
+
+footwm.main()
