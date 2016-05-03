@@ -24,11 +24,20 @@ xlib = ctypes.CDLL(ctypes.util.find_library('X11'))
 # c_int anyway.
 Atom = ctypes.c_ulong
 XID = ctypes.c_ulong
+Colormap = XID
 Window = XID
 Time = ctypes.c_ulong
+Status = ctypes.c_int
+
+atom_p = ctypes.POINTER(Atom)
+window_p = ctypes.POINTER(Window)
 
 # Xlib Bool predates C99 _Bool, but should come out to the same thing.
 Bool = ctypes.c_bool
+
+byte_p = ctypes.POINTER(ctypes.c_ubyte)
+ulong_p = ctypes.POINTER(ctypes.c_ulong)
+int_p = ctypes.POINTER(ctypes.c_int)
 
 ## Opaque pointer types.
 class Display(ctypes.Structure):
@@ -37,6 +46,9 @@ display_p = ctypes.POINTER(Display)
 class Screen(ctypes.Structure):
     pass
 screen_p = ctypes.POINTER(Screen)
+class Visual(ctypes.Structure):
+    pass
+visual_p = ctypes.POINTER(Visual)
 
 # Error Codes from X.h
 class Error(ctypes.c_int, EnumMixin):
@@ -137,6 +149,20 @@ xlib.XSync.argtypes = display_p, Bool
 # int XMapWindow(Display *display, Window w);
 xlib.XMapWindow.argtypes = display_p, Window
 
+# int XMapWindow(Display *display, Window w);
+xlib.XUnmapWindow.argtypes = display_p, Window
+
+# Status XQueryTree(Display *display, Window w, Window *root_return, Window *parent_return, Window **children_return, unsigned int *nchildren_return);
+xlib.XQueryTree.restype = Status
+xlib.XQueryTree.argtypes = display_p, Window, window_p, window_p, ctypes.POINTER(window_p), ctypes.POINTER(ctypes.c_uint)
+
+# Status XGetTransientForHint(Display *display, Window w, Window *prop_window_return);
+xlib.XGetTransientForHint.restype = Status
+xlib.XGetTransientForHint.argtypes = display_p, Window, window_p
+
+# int XFree(void *data);
+xlib.XFree.argtypes = ctypes.c_void_p,
+
 class XAnyEvent(ctypes.Structure):
     _fields_ = [
             ('type', ctypes.c_int),
@@ -175,12 +201,24 @@ class XMapRequestEvent(ctypes.Structure):
             ('window', Window),
             ]
 
+class XUnmapEvent(ctypes.Structure):
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('event', Window),
+            ('window', Window),
+            ('from_configure', Bool),
+            ]
+
 class XEvent(ctypes.Union):
     _fields_ = [
             ('type', ctypes.c_int),
             ('xany', XAnyEvent),
             ('xkey', XKeyEvent),
             ('xmaprequest', XMapRequestEvent),
+            ('xunmap', XUnmapEvent),
             ('pad', ctypes.c_long * 24),
             ]
 
@@ -252,3 +290,70 @@ class EventName(ctypes.c_int, EnumMixin):
     MappingNotify       = 34
     GenericEvent        = 35
     LASTEvent           = 36
+
+# Only define current ICCCM values. See Xutil.h
+class MapState(ctypes.c_int, EnumMixin):
+    IsUnmapped      = 0
+    IsUnviewable    = 1
+    IsViewable      = 2
+
+class XWindowAttributes(ctypes.Structure):
+    _fields_ = [
+            ('x', ctypes.c_int),
+            ('y', ctypes.c_int),
+            ('width', ctypes.c_int),
+            ('height', ctypes.c_int),
+            ('border_width', ctypes.c_int),
+            ('depth', ctypes.c_int),
+            ('visual', visual_p),
+            ('root', Window),
+            ('class', ctypes.c_int),
+            ('bit_gravity', ctypes.c_int),
+            ('win_gravity', ctypes.c_int),
+            ('backing_store', ctypes.c_int),
+            ('backing_planes', ctypes.c_ulong),
+            ('backing_pixel', ctypes.c_ulong),
+            ('save_under', Bool),
+            ('colormap', Colormap),
+            ('map_installed', Bool),
+            ('map_state', MapState),
+            ('all_event_masks', InputEventMask),
+            ('your_event_mask', InputEventMask),
+            ('do_not_propagate_mask', InputEventMask),
+            ('override_redirect', Bool),
+            ('screen', screen_p),
+            ]
+
+# XChangeProperty modes. See X.h
+class PropMode(ctypes.c_int, EnumMixin):
+    Replace         = 0
+    Prepend         = 1
+    Append          = 2
+
+# WM_STATE window state. See Xutil.h & ICCCM 4.1.3.1
+class WmStateState(ctypes.c_int, EnumMixin):
+    Withdrawn   = 0
+    Normal      = 1
+    Iconic      = 3
+
+class WmState(ctypes.Structure):
+    _fields_ = [
+            ('state', WmStateState),
+            ('icon', Window),
+            ]
+    def __str__(self):
+        return "{}({} icon={})".format(self.__class__.__name__, str(self.state), self.icon)
+
+wmstate_p = ctypes.POINTER(WmState)
+
+# Status XGetWindowAttributes(Display *display, Window w, XWindowAttributes *window_attributes_return);
+xlib.XGetWindowAttributes.restype = Status
+xlib.XGetWindowAttributes.argtypes = display_p, Window, ctypes.POINTER(XWindowAttributes)
+
+# int XChangeProperty(Display *display, Window w, Atom property, Atom type, int format, int mode, unsigned char *data, int nelements);
+xlib.XChangeProperty.argtypes = display_p, Window, Atom, Atom, ctypes.c_int, PropMode, byte_p, ctypes.c_int
+
+# int XGetWindowProperty(Display *display, Window w, Atom property, long long_offset, long long_length, Bool delete, Atom req_type, Atom
+#              *actual_type_return, int *actual_format_return, unsigned long *nitems_return, unsigned long *bytes_after_return, unsigned char
+#              **prop_return);
+xlib.XGetWindowProperty.argtypes = display_p, Window, Atom, ctypes.c_long, ctypes.c_long, Bool, Atom, atom_p, int_p, ulong_p, ulong_p, ctypes.POINTER(byte_p)
