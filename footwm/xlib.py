@@ -17,6 +17,40 @@ class EnumMixin(object):
     def __str__(self):
         return "{}({}:{})".format(self.__class__.__name__, self._label(), self.value)
 
+def BitmapMetaMaker(ct):
+    """ BitmapMeta class maker.
+
+    BitmapMeta classes augment ctypes number classes with knowledge of bits and
+    an improved string representation.
+
+    To use, define available bits in the _bits_ list. Note, we're not using the
+    same _fields_ attribute that ctypes uses to avoid a potential clash in case
+    ctypes number classes ever decide to use. _bits_ also makes more sense than
+    _fields_ for a bitmap.
+
+    Typical use is something like:
+
+        >>> class XBitmap(ctypes.c_long, metaclass=BitmapMetaMaker(ctypes.c_long)):
+        >>>     _bits_ = [ ('name1', (1 << 0)), ('name2', (1 << 1)), ]
+        >>> b = XBitmap(XBitmap.name1 | XBitmap.name2)
+        >>> str(b)
+        XBitmap(name1:0x01|name2:0x02)
+
+    We can't define a simple metaclass because all the ctypes classes I've used
+    define their own metaclass so we need to mix theirs and this one.
+    """
+    class BitmapMeta(type(ct)):
+        def __init__(cls, name, bases, dct):
+            super().__init__(name, bases, dct)
+            # Add a class attribute for every _bits_ entry.
+            for label, bit in cls._bits_:
+                setattr(cls, label, bit)
+
+            def __str__(self):
+                return '{}({})'.format(self.__class__.__name__, '|'.join(['{}:0x{:02x}'.format(label, i) for label, i in self._bits_ if self.value & i]))
+            setattr(cls, '__str__', __str__)
+    return BitmapMeta
+
 xlib = ctypes.CDLL(ctypes.util.find_library('X11'))
 
 # Xlib client side internally uses unsigned long, before converting to correct
@@ -226,33 +260,35 @@ class XEvent(ctypes.Union):
 xlib.XNextEvent.argtypes = display_p, ctypes.POINTER(XEvent)
 
 ## Event definitions. See X.h
-class InputEventMask(EnumMixin):
-    NoEvent             = 0
-    KeyPress            = 1 << 0
-    KeyRelease          = 1 << 1
-    ButtonPress         = 1 << 2
-    ButtonRelease       = 1 << 3
-    EnterWindow         = 1 << 4
-    LeaveWindow         = 1 << 5
-    PointerMotion       = 1 << 6
-    PointerMotionHint   = 1 << 7
-    Button1Motion       = 1 << 8
-    Button2Motion       = 1 << 9
-    Button3Motion       = 1 << 10
-    Button4Motion       = 1 << 11
-    Button5Motion       = 1 << 12
-    ButtonMotion        = 1 << 13
-    KeymapState         = 1 << 14
-    Exposure            = 1 << 15
-    VisibilityChange    = 1 << 16
-    StructureNotify     = 1 << 17
-    ResizeRedirect      = 1 << 18
-    SubstructureNotify  = 1 << 19
-    SubstructureRedirect = 1 << 20
-    FocusChange         = 1 << 21
-    PropertyChange      = 1 << 22
-    ColormapChange      = 1 << 23
-    OwnerGrabButton     = 1 << 24
+class InputEventMask(ctypes.c_long, metaclass=BitmapMetaMaker(ctypes.c_long)):
+    _bits_ = [
+            ('NoEvent',             (0)),
+            ('KeyPress',            (1 << 0)),
+            ('KeyRelease',          (1 << 1)),
+            ('ButtonPress',         (1 << 2)),
+            ('ButtonRelease',       (1 << 3)),
+            ('EnterWindow',         (1 << 4)),
+            ('LeaveWindow',         (1 << 5)),
+            ('PointerMotion',       (1 << 6)),
+            ('PointerMotionHint',   (1 << 7)),
+            ('Button1Motion',       (1 << 8)),
+            ('Button2Motion',       (1 << 9)),
+            ('Button3Motion',       (1 << 10)),
+            ('Button4Motion',       (1 << 11)),
+            ('Button5Motion',       (1 << 12)),
+            ('ButtonMotion',        (1 << 13)),
+            ('KeymapState',         (1 << 14)),
+            ('Exposure',            (1 << 15)),
+            ('VisibilityChange',    (1 << 16)),
+            ('StructureNotify',     (1 << 17)),
+            ('ResizeRedirect',      (1 << 18)),
+            ('SubstructureNotify',  (1 << 19)),
+            ('SubstructureRedirect',(1 << 20)),
+            ('FocusChange',         (1 << 21)),
+            ('PropertyChange',      (1 << 22)),
+            ('ColormapChange',      (1 << 23)),
+            ('OwnerGrabButton',     (1 << 24)),
+            ]
 
 class EventName(ctypes.c_int, EnumMixin):
     KeyPress            = 2
