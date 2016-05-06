@@ -124,6 +124,12 @@ class XErrorEvent(ctypes.Structure):
             ('request_code', ctypes.c_ubyte),
             ('minor_code', ctypes.c_ubyte),
         ]
+
+    def __str__(self):
+        # Convert error_code byte to Error int.
+        err = Error(self.error_code)
+        return '{}(type={}, resource=0x{:08x} serial={} error={} request={} minor={})'.format(self.__class__.__name__, self.type, self.resourceid, self.serial, err, self.request_code, self.minor_code)
+
 xerrorevent_p = ctypes.POINTER(XErrorEvent)
 
 # Display *XOpenDisplay(char *display_name);

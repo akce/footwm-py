@@ -15,6 +15,11 @@ import footwm.log
 
 log = footwm.log.make(handler=logging.FileHandler('debug.log'))
 
+def xerrorhandler(display_p, event_p):
+    event = event_p.contents
+    log.error('X Error: %s', event)
+    return 0
+
 class Foot(object):
 
     WMEVENTS = xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify
@@ -142,9 +147,9 @@ class Foot(object):
         xlib.xlib.XSync(self.display, False)
         if installed:
             # We are now the window manager - continue install.
-            # TODO Install regular X error handler.
             # XXX Should we remove WM_ICON_SIZE from root? In case an old WM installed it. See ICCCM 4.1.9
-            pass
+            # Install regular X error handler.
+            xlib.XSetErrorHandler(xerrorhandler)
         else:
             # Exit.
             log.error('Another WM is already running!')
@@ -186,5 +191,8 @@ class Foot(object):
         self.display = None
 
 def main():
-    foot = Foot()
+    try:
+        foot = Foot()
+    except Exception as e:
+        log.exception(e)
     foot.run()
