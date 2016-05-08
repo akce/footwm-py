@@ -30,6 +30,120 @@ class Geometry(object):
     def __str__(self):
         return '{}(x={}, y={}, w={}, h={})'.format(self.__class__.__name__, self.x, self.y, self.w, self.h)
 
+class Window(object):
+
+    WMEVENTS = xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify
+
+    def __init__(self, display, window):
+        self.display = display
+        self.window = window
+        self.children = []
+        self._load_window_attr()
+        self._import_children()
+
+    def hide(self):
+        xlib.xlib.XUnmapWindow(self.display, self.window)
+
+    def manage(self):
+        # watch, maintain, manage, control etc.
+        xlib.xlib.XSelectInput(self.display, self.window, self.WMEVENTS)
+
+    def resize(self, geom):
+        self.geom = geom
+        xlib.xlib.XMoveResizeWindow(self.display, self.window, self.geom.x, self.geom.y, self.geom.w, self.geom.h)
+
+    def show(self):
+        xlib.xlib.XMapWindow(self.display, self.window)
+
+    @property
+    def unmapped(self):
+        return self.map_state == self.map_state.IsUnmapped
+
+    @property
+    def wm_state(self):
+        state = None
+        a = ctypes.byref        # a = address shorthand.
+        WM_STATE = self.atoms[b'WM_STATE']
+        actual_type_return = xlib.Atom()
+        actual_format_return = ctypes.c_int()
+        nitems_return = ctypes.c_ulong(0)
+        bytes_after_return = ctypes.c_ulong()
+        prop_return = xlib.byte_p()
+        # sizeof return WmState struct in length of longs, not bytes. See XGetWindowProperty
+        long_length = int(ctypes.sizeof(xlib.WmState) / ctypes.sizeof(ctypes.c_long))
+
+        ret = xlib.xlib.XGetWindowProperty(self.display, self.window, WM_STATE, 0, long_length, False, WM_STATE, a(actual_type_return), a(actual_format_return), a(nitems_return), a(bytes_after_return), a(prop_return))
+        if ret == 0:
+            # Success! We need also check if anything was returned..
+            if nitems_return.value > 0:
+                # Cast the prop_return to a *WmState and return.
+                state = xlib.WmState()
+                sp = ctypes.cast(prop_return, xlib.wmstate_p).contents
+                state.state = sp.state
+                state.icon = sp.icon
+            xlib.xlib.XFree(prop_return)
+        return state.state
+
+    @wm_state.setter
+    def wm_state(self, winstate):
+        state = xlib.WmState()
+        state.state = xlib.WmStateState(winstate)
+        log.debug('Set WM_STATE window=%s state=%s', self.window, state.state)
+        state.icon = 0
+        WM_STATE = self.atoms[b'WM_STATE']
+        data_p = ctypes.cast(ctypes.byref(state), xlib.byte_p)
+        long_length = int(ctypes.sizeof(state) / ctypes.sizeof(ctypes.c_long))
+        # Specify as 32 (longs), that way the Xlib client will handle endian translations.
+        xlib.xlib.XChangeProperty(self.display, self.window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
+
+    def _load_window_attr(self):
+        wa = xlib.XWindowAttributes()
+        astatus = xlib.xlib.XGetWindowAttributes(self.display, self.window, ctypes.byref(wa))
+        if astatus > 0:
+            # XGetWindowAttr completed successfully.
+            # Extract the parts of XWindowAttributes that we need.
+            self.geom = Geometry(wa)
+            self.override_redirect = wa.override_redirect
+            self.map_state = wa.map_state
+        else:
+            log.error('XGetWindowAttributes failed! window=%s', self.window)
+            raise WindowError()
+
+    def _import_children(self):
+        root_return = xlib.Window(0)
+        parent_of_root = xlib.Window(0)
+        childrenp = xlib.window_p()
+        nchildren = ctypes.c_uint(0)
+
+        status = xlib.xlib.XQueryTree(self.display, self.window, ctypes.byref(root_return), ctypes.byref(parent_of_root), ctypes.byref(childrenp), ctypes.byref(nchildren))
+        # XXX assert that root_return == root?
+        log.debug('_import_children parent=%s count=%s', self, nchildren.value)
+        for i in range(nchildren.value):
+            try:
+                window = Window(self.display, childrenp[i])
+            except WindowError:
+                pass
+            else:
+                self.children.append(window)
+        if nchildren.value > 0:
+            xlib.xlib.XFree(childrenp)
+        log.debug('imported %s', self.children)
+
+    def _load_transientfor(self):
+        # Is the window a transient (eg, a modal dialog box for another window?)
+        # TODO see how multiple windows are done for apps like gimp.
+        # TODO maybe WM_HINTS:WindowGroupHint
+        # XXX Can we have a transient with no parent?
+        tf = xlib.Window()
+        tstatus = xlib.xlib.XGetTransientForHint(self.display, self.window, ctypes.byref(tf))
+        if tstatus > 0:
+            # window is transient, transientfor will contain the window id of the parent window.
+            log.debug('xtransient ret=%s for=%s', tstatus, tf.value)
+            self.transientfor = tf.value
+
+    def __str__(self):
+        return 'Window(id={} {} mapstate={})'.format(self.window, self.geom, self.map_state)
+
 def xerrorhandler(display_p, event_p):
     event = event_p.contents
     log.error('X Error: %s', event)
@@ -37,11 +151,8 @@ def xerrorhandler(display_p, event_p):
 
 class Foot(object):
 
-    WMEVENTS = xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify
-
     def __init__(self, displayname=None):
         # The shown window is always at index 0.
-        self.windows = []
         self._atoms = {}
         self.display = xlib.xlib.XOpenDisplay(displayname)
         log.debug('x connect displayname=%s', displayname) #, self.display.contents)
@@ -49,21 +160,21 @@ class Foot(object):
         self._init_atoms()
         self._install_wm()
         # TODO Lock the X server and import all existing windows?
-        self._import_windows()
+        #self.root.import_windows()
         self._make_handlers()
         self._show()
 
     def _load_root(self):
         # TODO: worry about screens, displays, xrandr and xinerama!
-        self.root = xlib.xlib.XDefaultRootWindow(self.display)
-        root_wa = self._get_window_attr(self.root)
-        self.root_geom = Geometry(root_wa)
-        log.debug('root: window=%s %s', self.root, self.root_geom)
+        self.root = Window(self.display, xlib.xlib.XDefaultRootWindow(self.display))
+        log.debug('root: %s', self.root)
 
     def _init_atoms(self):
         def aa(symbol, only_if_exists=False):
             self._atoms[symbol] = xlib.xlib.XInternAtom(self.display, symbol, only_if_exists)
         aa(b'WM_STATE')
+        # FIXME need a better organisation for shared atoms...
+        Window.atoms = self._atoms
 
     def _make_handlers(self):
         self.eventhandlers = {
@@ -76,119 +187,37 @@ class Foot(object):
                 xlib.EventName.UnmapNotify:         self.handle_unmapnotify,
                 }
 
-    def _import_windows(self, window=None):
-        if window is None:
-            w = self.root
-        else:
-            w = window
-        root_return = xlib.Window(0)
-        parent_of_root = xlib.Window(0)
-        childrenp = xlib.window_p()
-        nchildren = ctypes.c_uint(0)
-
-        status = xlib.xlib.XQueryTree(self.display, w, ctypes.byref(root_return), ctypes.byref(parent_of_root), ctypes.byref(childrenp), ctypes.byref(nchildren))
-        # XXX assert that root_return == root?
-        log.debug('_import_windows count=%s', nchildren.value)
-        for i in range(nchildren.value):
-            try:
-                self._add_window(childrenp[i])
-            except WindowError:
-                pass
-        if nchildren.value > 0:
-            xlib.xlib.XFree(childrenp)
-        log.debug('imported %s', self.windows)
-#        for x in self.windows:
-#            self._import_windows(x)
-
-    def _get_wm_state(self, window):
-        state = None
-        # TODO move this into a window object @property.
-        a = ctypes.byref        # a = address shorthand.
-        WM_STATE = self._atoms[b'WM_STATE']
-        actual_type_return = xlib.Atom()
-        actual_format_return = ctypes.c_int()
-        nitems_return = ctypes.c_ulong(0)
-        bytes_after_return = ctypes.c_ulong()
-        prop_return = xlib.byte_p()
-        # sizeof return WmState struct in length of longs, not bytes. See XGetWindowProperty
-        long_length = int(ctypes.sizeof(xlib.WmState) / ctypes.sizeof(ctypes.c_long))
-
-        ret = xlib.xlib.XGetWindowProperty(self.display, window, WM_STATE, 0, long_length, False, WM_STATE, a(actual_type_return), a(actual_format_return), a(nitems_return), a(bytes_after_return), a(prop_return))
-        if ret == 0:
-            # Success! We need also check if anything was returned..
-            if nitems_return.value > 0:
-                # Cast the prop_return to a *WmState and return.
-                state = xlib.WmState()
-                sp = ctypes.cast(prop_return, xlib.wmstate_p).contents
-                state.state = sp.state
-                state.icon = sp.icon
-            xlib.xlib.XFree(prop_return)
-        return state
-
-    def _set_wm_state(self, window, winstate):
-        state = xlib.WmState()
-        state.state = xlib.WmStateState(winstate)
-        log.debug('Set WM_STATE window=%s state=%s', window, state.state)
-        state.icon = 0
-        WM_STATE = self._atoms[b'WM_STATE']
-        data_p = ctypes.cast(ctypes.byref(state), xlib.byte_p)
-        long_length = int(ctypes.sizeof(state) / ctypes.sizeof(ctypes.c_long))
-        # Specify as 32 (longs), that way the Xlib client will handle endian translations.
-        xlib.xlib.XChangeProperty(self.display, window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
-
-    def _get_window_attr(self, window):
-        wa = xlib.XWindowAttributes()
-        astatus = xlib.xlib.XGetWindowAttributes(self.display, window, ctypes.byref(wa))
-        if astatus > 0:
-            # XGetWindowAttr completed successfully.
-            return wa
-        else:
-            log.error('XGetWindowAttributes failed! window=%s', window)
-            raise WindowError()
-
+    # XXX convert this function to traverse self.root.children.
     def _add_window(self, window):
         log.debug('_add_window %s', window)
-        wa = self._get_window_attr(window)
-        if wa.override_redirect:
-            log.debug('  ignore window - override_redirect is True')
+        if window.override_redirect:
+            log.debug('ignoring window - override_redirect is True')
+            # XXX Add to a list as well?
         else:
-            log.debug('xwinattr x=%s y=%s w=%s h=%s mapstate=%s my=%s', wa.x, wa.y, wa.width, wa.height, wa.map_state, wa.your_event_mask)
-            # Is the window a transient (eg, a modal dialog box for another window?)
-            # TODO see how multiple windows are done for apps like gimp.
-            # TODO maybe WM_HINTS:WindowGroupHint
-            # XXX Can we have a transient with no parent?
-            transientfor = xlib.Window()
-            tstatus = xlib.xlib.XGetTransientForHint(self.display, window, ctypes.byref(transientfor))
-            if tstatus > 0:
-                # window is transient, transientfor will contain the window id of the parent window.
-                log.debug('xtransient ret=%s for=%s', tstatus, transientfor.value)
-                # TODO do something with transientfor.
+            # Add the window to our known list and make sure it's withdrawn (not-visible).
+            # Once footwm finishes startup, we'll get it to show the highest priority window in the list.
+            # All normal windows are kept in the withdrawn state unless they're on the top of the MRU stack.
+            window.manage()
+            # XXX is this right? XWindowAttributes are what the client wants or the actual state?
+            if window.unmapped:
+                # Add a WM_STATE property to the window. See ICCCM 4.1.3.1
+                window.wm_state = xlib.WmStateState.Withdrawn
             else:
-                # Add the window to our known list and make sure it's withdrawn (not-visible).
-                # Once footwm finishes startup, we'll get it to show the highest priority window in the list.
-                # All normal windows are kept in the withdrawn state unless they're on the top of the MRU stack.
-                xlib.xlib.XSelectInput(self.display, window, self.WMEVENTS)
-                # XXX is this right? XWindowAttributes are what the client wants or the actual state?
-                if wa.map_state == xlib.MapState.IsUnmapped:
-                    # Add a WM_STATE property to the window. See ICCCM 4.1.3.1
-                    self._set_wm_state(window, xlib.WmStateState.Withdrawn)
-                else:
-                    xlib.xlib.XUnmapWindow(self.display, window)
-                self.windows.append(window)
+                window.hide()
 
     def _show(self):
         """ Show the highest priority window. """
         # XXX Only select input on mapped (visible) window(s).
         # TODO assert all windows are withdrawn?
         try:
-            window = self.windows[0]
+            window = self.root.children[0]
         except IndexError:
             # Windows list is empty, nothing to do.
             pass
         else:
             log.debug('show window=%s', window)
-            xlib.xlib.XMoveResizeWindow(self.display, window, self.root_geom.x, self.root_geom.y, self.root_geom.w, self.root_geom.h)
-            xlib.xlib.XMapWindow(self.display, window)
+            window.resize(self.root.geom)
+            window.show()
 
     def _install_wm(self):
         """ Install foot as *the* window manager. """
@@ -202,7 +231,7 @@ class Foot(object):
             # Need to return an int here - it's ignored. No explicit return will cause an error.
             return 0
         olderrorhandler = xlib.XSetErrorHandler(wmerrhandler)
-        xlib.xlib.XSelectInput(self.display, self.root, self.WMEVENTS)
+        self.root.manage()
         xlib.xlib.XSync(self.display, False)
         if installed:
             # We are now the window manager - continue install.
@@ -282,12 +311,13 @@ class Foot(object):
         # Server has displayed the window.
         e = event.xmap
         log.debug('MapNotify window=%s event=%s override_redirect=%s', e.window, e.event, e.override_redirect)
-        self._set_wm_state(e.window, xlib.WmStateState.Normal)
+        # XXX need to find e.window
+        # window.wm_state = xlib.WmStateState.Normal
 
     def handle_maprequest(self, event):
         # A window has requested that it be shown.
         w = event.xmaprequest.window
-        log.debug('MapRequest window=%s known=%s', w, w in self.windows)
+        log.debug('MapRequest window=%s known=%s', w, w in self.root.children)  # TODO recursive search through children.
         xlib.xlib.XMapWindow(self.display, w)
         # TODO Add to self.windows, show some message or put in an attention group?
 
