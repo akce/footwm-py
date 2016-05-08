@@ -106,7 +106,7 @@ class Window(object):
             self.override_redirect = wa.override_redirect
             self.map_state = wa.map_state
         else:
-            log.error('XGetWindowAttributes failed! window=%s', self.window)
+            log.error('XGetWindowAttributes failed! window=0x%08x', self.window)
             raise WindowError()
 
     def _import_children(self):
@@ -142,7 +142,7 @@ class Window(object):
             self.transientfor = tf.value
 
     def __str__(self):
-        return 'Window(id={} {} mapstate={})'.format(self.window, self.geom, self.map_state)
+        return 'Window(id=0x{:08x} {} mapstate={})'.format(self.window, self.geom, self.map_state)
 
 def xerrorhandler(display_p, event_p):
     event = event_p.contents
@@ -267,19 +267,19 @@ class Foot(object):
         # TODO call self._add_window
         e = event.xcreatewindow
         geom = Geometry(e)
-        log.debug('CreateNotify window=%s parent=%s %s override_redirect=%s', e.window, e.parent, geom, e.override_redirect)
+        log.debug('CreateNotify window=0x%08x parent=%s %s override_redirect=%s', e.window, e.parent, geom, e.override_redirect)
 
     def handle_configurenotify(self, event):
         # The X server has moved and/or resized window e.window
         e = event.xconfigure
         geom = Geometry(e)
-        log.debug('ConfigureNotify w=%s %s', e.window, geom)
+        log.debug('ConfigureNotify window=0x%08x %s', e.window, geom)
 
     def handle_configurerequest(self, event):
         # Some other client tried to reconfigure e.window
         e = event.xconfigurerequest
         geom = Geometry(e)
-        log.debug('ConfigureRequest window=%s parent=%s %s %s', e.window, e.parent, geom, e.value_mask)
+        log.debug('ConfigureRequest window=0x%08x parent=%s %s %s', e.window, e.parent, geom, e.value_mask)
         # TODO allow configurerequest for transients, ignore for normal windows?
         # XXX Check if e.window is current window?
         # FIXME allow all configure requests for now.
@@ -297,7 +297,7 @@ class Foot(object):
         if e.value_mask.value & e.value_mask.CWHeight:
             changemask |= e.value_mask.CWHeight
             wc.height = e.height
-        #log.debug('XConfigureWindow window=%s %s %s', e.window, xlib.ConfigureWindowStructure(changemask), Geometry(wc))
+        log.debug('granted window=0x%08x %s %s', e.window, xlib.ConfigureWindowStructure(changemask), Geometry(wc))
         xlib.xlib.XConfigureWindow(self.display, e.window, changemask, ctypes.byref(wc))
         xlib.xlib.XSync(self.display, False)
 
@@ -305,19 +305,19 @@ class Foot(object):
         # Window has been destroyed.
         e = event.xdestroywindow
         # e.event is either the destroyed window or its parent.
-        log.debug('DestroyNotify window=%s event=%s', e.window, e.event)
+        log.debug('DestroyNotify window=0x%08x event=%s', e.window, e.event)
 
     def handle_mapnotify(self, event):
         # Server has displayed the window.
         e = event.xmap
-        log.debug('MapNotify window=%s event=%s override_redirect=%s', e.window, e.event, e.override_redirect)
+        log.debug('MapNotify window=0x%08x event=%s override_redirect=%s', e.window, e.event, e.override_redirect)
         # XXX need to find e.window
         # window.wm_state = xlib.WmStateState.Normal
 
     def handle_maprequest(self, event):
         # A window has requested that it be shown.
         w = event.xmaprequest.window
-        log.debug('MapRequest window=%s known=%s', w, w in self.root.children)  # TODO recursive search through children.
+        log.debug('MapRequest window=0x%08x known=%s', w, w in self.root.children)  # TODO recursive search through children.
         xlib.xlib.XMapWindow(self.display, w)
         # TODO Add to self.windows, show some message or put in an attention group?
 
@@ -330,7 +330,7 @@ class Foot(object):
             xlib.xlib.XUnmapWindow(self.display, e.window)
         else:
             # X has unmapped the window, we can now put it in the withdrawn state.
-            log.debug('%s: Unmap successful', e.window)
+            log.debug('0x%08x: Unmap successful', e.window)
             # FIXME disable this for now, this can be called on a window that's already destroyed and cause segfaults!
             #self._set_wm_state(e.window, xlib.WmStateState.Withdrawn)
             #xlib.xlib.XSync(self.display, False)
