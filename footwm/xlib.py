@@ -212,6 +212,85 @@ class XAnyEvent(ctypes.Structure):
             ('window', Window),
             ]
 
+class StackingMethod(ctypes.c_int, EnumMixin):
+    Above =     0
+    Below =     1
+    TopIf =     2
+    BottomIf =  3
+    Opposite =  4
+
+class ConfigureWindowStructure(ctypes.c_ulong, metaclass=BitmapMetaMaker(ctypes.c_ulong)):
+    _bits_ = [
+        ('CWX',             (1<<0)),
+        ('CWY',             (1<<1)),
+        ('CWWidth',         (1<<2)),
+        ('CWHeight',        (1<<3)),
+        ('CWBorderWidth',   (1<<4)),
+        ('CWSibling',       (1<<5)),
+        ('CWStackMode',     (1<<6)),
+        ]
+
+class XCreateWindowEvent(ctypes.Structure):
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('parent', Window),
+            ('window', Window),
+            ('x', ctypes.c_int),
+            ('y', ctypes.c_int),
+            ('width', ctypes.c_int),
+            ('height', ctypes.c_int),
+            ('border_width', ctypes.c_int),
+            ('override_redirect', Bool),
+            ]
+
+class XConfigureEvent(ctypes.Structure):
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('event', Window),
+            ('window', Window),
+            ('x', ctypes.c_int),
+            ('y', ctypes.c_int),
+            ('width', ctypes.c_int),
+            ('height', ctypes.c_int),
+            ('border_width', ctypes.c_int),
+            ('above', Window),
+            ('override_redirect', Bool),
+            ]
+
+class XConfigureRequestEvent(ctypes.Structure):
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('parent', Window),
+            ('window', Window),
+            ('x', ctypes.c_int),
+            ('y', ctypes.c_int),
+            ('width', ctypes.c_int),
+            ('height', ctypes.c_int),
+            ('border_width', ctypes.c_int),
+            ('above', Window),
+            ('detail', StackingMethod),
+            ('value_mask', ConfigureWindowStructure),
+            ]
+
+class XDestroyWindowEvent(ctypes.Structure):
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('event', Window),
+            ('window', Window),
+            ]
+
 class XKeyEvent(ctypes.Structure):
     _fields_ = [
             ('type', ctypes.c_int),
@@ -229,6 +308,17 @@ class XKeyEvent(ctypes.Structure):
             ('state', ctypes.c_uint),
             ('keycode', ctypes.c_uint),
             ('same_screen', Bool),
+            ]
+
+class XMapEvent(ctypes.Structure):
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('event', Window),
+            ('window', Window),
+            ('override_redirect', Bool),
             ]
 
 class XMapRequestEvent(ctypes.Structure):
@@ -256,7 +346,12 @@ class XEvent(ctypes.Union):
     _fields_ = [
             ('type', ctypes.c_int),
             ('xany', XAnyEvent),
+            ('xcreatewindow', XCreateWindowEvent),
+            ('xconfigure', XConfigureEvent),
+            ('xconfigurerequest', XConfigureRequestEvent),
+            ('xdestroywindow', XDestroyWindowEvent),
             ('xkey', XKeyEvent),
+            ('xmap', XMapEvent),
             ('xmaprequest', XMapRequestEvent),
             ('xunmap', XUnmapEvent),
             ('pad', ctypes.c_long * 24),
@@ -399,3 +494,21 @@ xlib.XChangeProperty.argtypes = display_p, Window, Atom, Atom, ctypes.c_int, Pro
 #              *actual_type_return, int *actual_format_return, unsigned long *nitems_return, unsigned long *bytes_after_return, unsigned char
 #              **prop_return);
 xlib.XGetWindowProperty.argtypes = display_p, Window, Atom, ctypes.c_long, ctypes.c_long, Bool, Atom, atom_p, int_p, ulong_p, ulong_p, ctypes.POINTER(byte_p)
+
+class XWindowChanges(ctypes.Structure):
+    _fields_ = [
+            ('x', ctypes.c_int),
+            ('y', ctypes.c_int),
+            ('width', ctypes.c_int),
+            ('height', ctypes.c_int),
+            ('border_width', ctypes.c_int),
+            ('sibling', Window),
+            ('stack_mode', StackingMethod),
+            ]
+xwindowchanges_p = ctypes.POINTER(XWindowChanges)
+
+# int XConfigureWindow(Display *display, Window w, unsigned value_mask, XWindowChanges *changes);
+xlib.XConfigureWindow.argtypes = display_p, Window, ConfigureWindowStructure, xwindowchanges_p
+
+# int XMoveResizeWindow(Display *display, Window w, int x, int y, unsigned width, unsigned height);
+xlib.XMoveResizeWindow.argtypes = display_p, Window, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint
