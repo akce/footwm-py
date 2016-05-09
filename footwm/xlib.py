@@ -512,3 +512,39 @@ xlib.XConfigureWindow.argtypes = display_p, Window, ConfigureWindowStructure, xw
 
 # int XMoveResizeWindow(Display *display, Window w, int x, int y, unsigned width, unsigned height);
 xlib.XMoveResizeWindow.argtypes = display_p, Window, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint
+
+# X protocol atoms, see Xatom.h
+class XA(ctypes.c_ulong, EnumMixin):
+    STRING      = 31
+
+# Xutil.h
+class XICCEncodingStyle(ctypes.c_ulong, EnumMixin):
+    String         = 0
+    CompoundText   = 1
+    Text           = 2
+    StdICCText     = 3
+    UTF8String     = 4
+
+class XTextProperty(ctypes.Structure):
+    _fields_ = [
+            ('value', byte_p),
+            ('encoding', Atom),
+            ('format', ctypes.c_int),
+            ('nitems', ctypes.c_ulong),
+            ]
+    def __str__(self):
+        return '{}(value={}, encoding={}, format={}, nitems={})'.format(self.__class__.__name__, self.value, self.encoding, self.format, self.nitems)
+
+xtextproperty_p = ctypes.POINTER(XTextProperty)
+
+# Status XGetWMName(Display *display, Window w, XTextProperty *text_prop_return);
+xlib.XGetWMName.restype = Status
+xlib.XGetWMName.argtypes = display_p, Window, xtextproperty_p
+
+# void XFreeStringList(char **list);
+xlib.XFreeStringList.restype = None
+xlib.XFreeStringList.argtypes = ctypes.POINTER(ctypes.c_char_p),
+
+# Status XTextPropertyToStringList(XTextProperty *text_prop, char ***list_return, int *count_return);
+xlib.XTextPropertyToStringList.restype = Status
+xlib.XTextPropertyToStringList.argtypes = xtextproperty_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_char_p)), int_p

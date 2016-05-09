@@ -39,6 +39,9 @@ class Window(object):
         self.window = window
         self.children = []
         self._load_window_attr()
+        wm_state = self.wm_state
+        self.name = self.wm_name
+        log.debug('wm_state window=0x%08x %s %s', self.window, self.name, wm_state)
         self._import_children()
 
     def hide(self):
@@ -59,6 +62,43 @@ class Window(object):
     def unmapped(self):
         return self.map_state == self.map_state.IsUnmapped
 
+    def _xtext_to_lines(self, xtextprop):
+        lines = []
+        #enc = 'utf8'
+        enc = None
+        if xtextprop.encoding == xlib.XA.STRING:
+            # ICCCM 2.7.1 - XA_STRING == latin-1 encoding.
+            enc = 'latin1'
+        else:
+            atomname = xlib.xlib.XGetAtomName(self.display, xtextprop.encoding)
+            log.error('************ UNSUPPORTED TEXT ENCODING ATOM=%s %s', xtextprop.encoding, atomname)
+            xlib.xlib.XFree(atomname)
+        if enc:
+            nitems = ctypes.c_int()
+            list_return = ctypes.POINTER(ctypes.c_char_p)()
+            status = xlib.xlib.XTextPropertyToStringList(ctypes.byref(xtextprop), ctypes.byref(list_return), ctypes.byref(nitems))
+            if status > 0:
+                lines = [str(list_return[i], enc) for i in range(nitems.value)]
+                log.debug('xtext lines %s', lines)
+                xlib.xlib.XFreeStringList(list_return)
+        return lines
+
+    @property
+    def wm_name(self):
+        name = None
+        xtp = xlib.XTextProperty()
+        status = xlib.xlib.XGetWMName(self.display, self.window, ctypes.byref(xtp))
+        if status > 0:
+            log.debug('xtp %s', xtp)
+            if xtp.nitems > 0:
+                try:
+                    name = self._xtext_to_lines(xtp)[0]
+                except IndexError:
+                    pass
+                xlib.xlib.XFree(xtp.value)
+        log.debug('wm_name window=0x%08x name=%s status=%d', self.window, name, status)
+        return name
+
     @property
     def wm_state(self):
         state = None
@@ -76,13 +116,11 @@ class Window(object):
         if ret == 0:
             # Success! We need also check if anything was returned..
             if nitems_return.value > 0:
-                # Cast the prop_return to a *WmState and return.
-                state = xlib.WmState()
+                # This wm doesn't support window icons, so only return WmState.state.
                 sp = ctypes.cast(prop_return, xlib.wmstate_p).contents
-                state.state = sp.state
-                state.icon = sp.icon
+                state = sp.state
             xlib.xlib.XFree(prop_return)
-        return state.state
+        return state
 
     @wm_state.setter
     def wm_state(self, winstate):
@@ -127,7 +165,6 @@ class Window(object):
                 self.children.append(window)
         if nchildren.value > 0:
             xlib.xlib.XFree(childrenp)
-        log.debug('imported %s', self.children)
 
     def _load_transientfor(self):
         # Is the window a transient (eg, a modal dialog box for another window?)
@@ -142,7 +179,7 @@ class Window(object):
             self.transientfor = tf.value
 
     def __str__(self):
-        return 'Window(id=0x{:08x} {} mapstate={})'.format(self.window, self.geom, self.map_state)
+        return 'Window(id=0x{:08x} {} mapstate={} override_redirect={})'.format(self.window, self.geom, self.map_state, self.override_redirect)
 
 def xerrorhandler(display_p, event_p):
     event = event_p.contents
@@ -155,9 +192,9 @@ class Foot(object):
         # The shown window is always at index 0.
         self._atoms = {}
         self.display = xlib.xlib.XOpenDisplay(displayname)
+        self._init_atoms()
         log.debug('x connect displayname=%s', displayname) #, self.display.contents)
         self._load_root()
-        self._init_atoms()
         self._install_wm()
         # TODO Lock the X server and import all existing windows?
         #self.root.import_windows()
