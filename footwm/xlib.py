@@ -7,6 +7,10 @@ Copyright (c) 2016 Akce
 import ctypes
 import ctypes.util
 
+# Resource constants X.h
+PointerRoot = 1
+CurrentTime = 0
+
 class EnumMixin(object):
 
     def _label(self):
@@ -548,3 +552,11 @@ xlib.XFreeStringList.argtypes = ctypes.POINTER(ctypes.c_char_p),
 # Status XTextPropertyToStringList(XTextProperty *text_prop, char ***list_return, int *count_return);
 xlib.XTextPropertyToStringList.restype = Status
 xlib.XTextPropertyToStringList.argtypes = xtextproperty_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_char_p)), int_p
+
+class InputFocus(ctypes.c_int, EnumMixin):
+    RevertToNone        = 0
+    RevertToPointerRoot = 1
+    RevertToParent      = 2
+
+# int XSetInputFocus(Display *display, Window focus, int revert_to, Time time);
+xlib.XSetInputFocus.argtypes = display_p, Window, ctypes.c_int, Time
