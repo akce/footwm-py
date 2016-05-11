@@ -27,6 +27,9 @@ class Geometry(object):
         self.w = xwinattr.width
         self.h = xwinattr.height
 
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y and self.w == other.w and self.h == other.h
+
     def __str__(self):
         return '{}(x={}, y={}, w={}, h={})'.format(self.__class__.__name__, self.x, self.y, self.w, self.h)
 
@@ -82,8 +85,11 @@ class Window(object):
         xlib.xlib.XSelectInput(self.display, self.window, eventmask)
 
     def resize(self, geom):
-        self.geom = geom
-        xlib.xlib.XMoveResizeWindow(self.display, self.window, self.geom.x, self.geom.y, self.geom.w, self.geom.h)
+        # Actual geom will be set in the configure notify handler.
+        self.wantedgeom = geom
+        if self.wantedgeom != self.geom:
+            log.debug('0x%08x: attempt resize %s -> %s', self.window, self.geom, self.wantedgeom)
+            xlib.xlib.XMoveResizeWindow(self.display, self.window, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
 
     def show(self):
         xlib.xlib.XMapWindow(self.display, self.window)
@@ -181,6 +187,7 @@ class Window(object):
             # XGetWindowAttr completed successfully.
             # Extract the parts of XWindowAttributes that we need.
             self.geom = Geometry(wa)
+            self.wantedgeom = self.geom
             self.override_redirect = wa.override_redirect
             self.map_state = wa.map_state
         else:
@@ -379,15 +386,25 @@ class Foot(object):
         if e.event == e.window:
             geom = Geometry(e)
             log.debug('0x%08x: ConfigureNotify %s', e.window, geom)
+            window = find_window(self.root, e.window)
+            if window:
+                window.geom = geom
+                if window.wantedgeom == geom:
+                    log.debug('0x%08x: current dimensions are good, no need to request again', e.window)
+                else:
+                    # Window is not the size we want, make a configure request.
+                    wg = window.wantedgeom
+                    log.debug('0x%08x: requesting again, wanted %s current %s', e.window, window.wantedgeom, window.geom)
+                    xlib.xlib.XMoveResizeWindow(self.display, e.window, wg.x, wg.y, wg.w, wg.h)
 
     def handle_configurerequest(self, event):
         # Some other client tried to reconfigure e.window
+        # NOTE: Allow all configure requests, even if their dimensions are not what we want.
+        # Most clients get slow and behave weird if they don't get their way, so we'll honour all
+        # requests but we'll request the dimensions we want in the callback configure notify handler.
         e = event.xconfigurerequest
         geom = Geometry(e)
         log.debug('0x%08x: ConfigureRequest parent=0x%08x %s %s', e.window, e.parent, geom, e.value_mask)
-        # TODO allow configurerequest for transients, ignore for normal windows?
-        # XXX Check if e.window is current window?
-        # FIXME allow all configure requests for now.
         wc = xlib.XWindowChanges()
         changemask = 0
         if e.value_mask.value & e.value_mask.CWX:
@@ -402,9 +419,10 @@ class Foot(object):
         if e.value_mask.value & e.value_mask.CWHeight:
             changemask |= e.value_mask.CWHeight
             wc.height = e.height
-        log.debug('0x%08x: granted %s %s', e.window, xlib.ConfigureWindowStructure(changemask), Geometry(wc))
+        # Grant requested geom.
+        requestedgeom = Geometry(wc)
+        log.debug('0x%08x: requested %s %s', e.window, xlib.ConfigureWindowStructure(changemask), requestedgeom)
         xlib.xlib.XConfigureWindow(self.display, e.window, changemask, ctypes.byref(wc))
-        xlib.xlib.XSync(self.display, False)
 
     def handle_destroynotify(self, event):
         # Window has been destroyed.
