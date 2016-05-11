@@ -232,7 +232,7 @@ class Window(object):
     def __str__(self):
         args = [
                 'id=0x{:08x}'.format(self.window),
-#                '"name={}"'.format(self.name),
+                '"name={}"'.format(self.name),
                 str(self.geom),
                 'mapstate={}'.format(self.map_state),
                 'override_redirect={}'.format(self.override_redirect),
