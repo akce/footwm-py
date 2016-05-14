@@ -33,24 +33,11 @@ class Geometry(object):
     def __str__(self):
         return '{}(x={}, y={}, w={}, h={})'.format(self.__class__.__name__, self.x, self.y, self.w, self.h)
 
-def find_visible(rootwin):
-    try:
-        visible = rootwin.children[0]
-    except IndexError:
-        visible = rootwin
-    return visible
-
-def find_visible_recursive(rootwin):
-    """ Find the visible child window. Note that rootwin will be returned if there's no children. """
-    # Finds the highest priority leaf window.
-    visible = rootwin
-    while True:
-        try:
-            visible = visible.children[0]
-        except IndexError:
-            # No more children.
-            break
-    return visible
+def find_visible(rootwin, count=1):
+    """ Partition the window list into windows that need to be displayed and those that need to be hidden. """
+    visible = rootwin.children[:count]
+    hidden = rootwin.children[count:]
+    return visible, hidden
 
 def find_window(rootwin, win):
     """ Find window object in a window hierarchy. """
@@ -73,6 +60,7 @@ class Window(object):
         self.parent = parent
         self.children = []
         self._load_window_attr()
+        self.wantedgeom = self.geom
         self._load_transientfor()
         wm_state = self.wm_state
         self.name = self.wm_name
@@ -187,33 +175,33 @@ class Window(object):
             # XGetWindowAttr completed successfully.
             # Extract the parts of XWindowAttributes that we need.
             self.geom = Geometry(wa)
-            self.wantedgeom = self.geom
             self.override_redirect = wa.override_redirect
             self.map_state = wa.map_state
         else:
             log.error('0x%08x: XGetWindowAttributes failed!', self.window)
             raise WindowError()
 
-    def import_children(self, recurse=False):
+    def get_children(self):
+        a = ctypes.byref        # a = address shorthand.
         root_return = xlib.Window(0)
         parent_of_root = xlib.Window(0)
         childrenp = xlib.window_p()
         nchildren = ctypes.c_uint(0)
-
-        status = xlib.xlib.XQueryTree(self.display, self.window, ctypes.byref(root_return), ctypes.byref(parent_of_root), ctypes.byref(childrenp), ctypes.byref(nchildren))
         # XXX assert that root_return == root?
-        for i in range(nchildren.value):
+        status = xlib.xlib.XQueryTree(self.display, self.window, a(root_return), a(parent_of_root), a(childrenp), a(nchildren))
+        children = [childrenp[i] for i in range(nchildren.value)]
+        if nchildren.value > 0:
+            xlib.xlib.XFree(childrenp)
+        return children
+
+    def import_children(self):
+        for w in self.get_children():
             try:
-                window = Window(self.display, childrenp[i], self.window)
+                window = Window(self.display, w, self.window)
             except WindowError:
                 pass
             else:
                 self.children.append(window)
-        if nchildren.value > 0:
-            xlib.xlib.XFree(childrenp)
-        if recurse:
-            for c in self.children:
-                c.import_children()
 
     def _load_transientfor(self):
         # Is the window a transient (eg, a modal dialog box for another window?)
@@ -232,7 +220,7 @@ class Window(object):
     def __str__(self):
         args = [
                 'id=0x{:08x}'.format(self.window),
-                '"name={}"'.format(self.name),
+                'name="{}"'.format(self.name),
                 str(self.geom),
                 'mapstate={}'.format(self.map_state),
                 'override_redirect={}'.format(self.override_redirect),
@@ -253,11 +241,10 @@ def xerrorhandler(display_p, event_p):
 class Foot(object):
 
     def __init__(self, displayname=None):
-        # The shown window is always at index 0.
         self._atoms = {}
         self.display = xlib.xlib.XOpenDisplay(displayname)
+        log.debug('%s: connect displayname=%s', self.__class__.__name__, displayname) #, self.display.contents)
         self._init_atoms()
-        log.debug('x connect displayname=%s', displayname) #, self.display.contents)
         self._load_root()
         self._install_wm()
         self._make_handlers()
@@ -300,12 +287,6 @@ class Foot(object):
                 # Once footwm finishes startup, we'll get it to show the highest priority window in the list.
                 # All normal windows are kept in the withdrawn state unless they're on the top of the MRU stack.
                 window.manage(xlib.InputEventMask.StructureNotify)
-#               # XXX is this right? XWindowAttributes are what the client wants or the actual state?
-#               if window.unmapped:
-#                   # Add a WM_STATE property to the window. See ICCCM 4.1.3.1
-#                   window.wm_state = xlib.WmStateState.Withdrawn
-#               else:
-#                   window.hide()
                 log.debug('0x%08x: _add_window added to %s', window.window, parent)
             else:
                 log.error('0x%08x: _add_window parent 0x%08x not found, ignoring window', window.window, window.parent)
@@ -314,19 +295,17 @@ class Foot(object):
         """ Show the highest priority window. """
         # XXX Only select input on mapped (visible) window(s).
         # TODO assert all windows are withdrawn?
-        try:
-            window = find_visible(self.root)
-        except IndexError:
-            # Windows list is empty, nothing to do.
-            pass
-        else:
-            if window:
-                log.debug('0x%08x: showing window=%s', window.window, window)
-                window.resize(self.root.geom)
-                window.show()
-                window.focus()
-            else:
-                log.info('_show: no visible windows')
+        visibles, hiddens = find_visible(self.root)
+        for window in visibles:
+            window.manage(xlib.InputEventMask.StructureNotify)
+            window.resize(self.root.geom)
+            window.show()
+            window.focus()
+            #window._load_window_attr()
+            log.debug('0x%08x: showing window=%s', window.window, window)
+        for window in hiddens:
+            log.debug('0x%08x: hiding %s', window.window, window)
+            window.hide()
 
     def _install_wm(self):
         """ Install foot as *the* window manager. """
@@ -430,17 +409,15 @@ class Foot(object):
         # Only handle if the notify event not caused by a sub-structure redirect.
         if e.event == e.window:
             log.debug('0x%08x: DestroyNotify event=0x%08x', e.window, e.event)
-            # Remove window from window hierarchy.
+            # Remove the destroyed window from window hierarchy.
+            # This is also now done in the unmapnotify handler where it checks if the window exists or not.
+            # Leaving this code here in case the window is destroyed between the call to unmapnotify and this function.
             w = find_window(self.root, e.window)
             if w is None:
-                log.error('0x%08x: not found in root %s', e.window, self.root)
+                log.debug('0x%08x: not found in root %s', e.window, self.root)
             else:
-                p = find_window(self.root, w.parent)
-                if p is None:
-                    log.error('0x%08x: parent 0x%08x not found', e.window, w.parent)
-                else:
-                    p.remove_child(w)
-                    log.debug('0x%08x: removed from %s', w.window, p)
+                self.root.remove_child(w)
+                log.debug('0x%08x: removed from %s', w.window, p)
 
     def handle_mapnotify(self, event):
         # Server has displayed the window.
@@ -448,6 +425,7 @@ class Foot(object):
         # Only handle if the notify event not caused by a sub-structure redirect.
         if e.event == e.window:
             log.debug('0x%08x: MapNotify event=0x%08x override_redirect=%s', e.window, e.event, e.override_redirect)
+            # Add a WM_STATE property to the window. See ICCCM 4.1.3.1
             window = find_window(self.root, e.window)
             if window:
                 window.wm_state = xlib.WmStateState.Normal
@@ -480,10 +458,18 @@ class Foot(object):
                 # X has unmapped the window, we can now put it in the withdrawn state.
                 window = find_window(self.root, e.window)
                 if window:
-                    log.debug('0x%08x: Unmap successful', e.window)
-                    # FIXME this causes the segfault on wm shutdown!
-                    window.wm_state = xlib.WmStateState.Withdrawn
-                # TODO now draw next priority window?
+                    # Check that the window still exists!
+                    # We have to do this check or else writing to a destroyed window will cause our event loop to halt.
+                    # XXX Should we XGrabServer here?
+                    wids = self.root.get_children()
+                    if window.window in wids:
+                        # Mark window Withdrawn. See ICCCM 4.1.3.1
+                        window.wm_state = xlib.WmStateState.Withdrawn
+                    else:
+                        self.root.remove_child(window)
+                    log.debug('0x%08x: Unmap successful %s', e.window, window)
+                    # Since the window has been unmapped(hidden) show the next window in the list.
+                    self._show()
 
     def __del__(self):
         xlib.xlib.XCloseDisplay(self.display)
