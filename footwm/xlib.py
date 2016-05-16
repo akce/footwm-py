@@ -499,6 +499,18 @@ xlib.XChangeProperty.argtypes = display_p, Window, Atom, Atom, ctypes.c_int, Pro
 #              **prop_return);
 xlib.XGetWindowProperty.argtypes = display_p, Window, Atom, ctypes.c_long, ctypes.c_long, Bool, Atom, atom_p, int_p, ulong_p, ulong_p, ctypes.POINTER(byte_p)
 
+class XClassHint(ctypes.Structure):
+    _fields_ = [
+            # NOTE: do *not* use c_char_p here. ctypes will automatically convert them to python str and discard the c-pointers. We have to retain
+            # the pointers in order to free them via xlib.XFree. Clients will need to cast these to c_char_p before creating the str.
+            ('res_name', ctypes.POINTER(ctypes.c_char)),
+            ('res_class', ctypes.POINTER(ctypes.c_char)),
+            ]
+
+# Status XGetClassHint(Display *display, Window w, XClassHint *class_hints_return);
+xlib.XGetClassHint.restype = Status
+xlib.XGetClassHint.argtypes = display_p, Window, ctypes.POINTER(XClassHint)
+
 class XWindowChanges(ctypes.Structure):
     _fields_ = [
             ('x', ctypes.c_int),
