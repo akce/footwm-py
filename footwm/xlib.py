@@ -223,6 +223,21 @@ class StackingMethod(ctypes.c_int, EnumMixin):
     BottomIf =  3
     Opposite =  4
 
+class KeyModifierMask(ctypes.c_uint, metaclass=BitmapMetaMaker(ctypes.c_uint)):
+    _bits_ = [
+            ('Shift',   (1<<0)),
+            ('Lock',    (1<<1)),
+            ('Control', (1<<2)),
+            ('Mod1',    (1<<3)),
+            ('Mod2',    (1<<4)),
+            ('Mod3',    (1<<5)),
+            ('Mod4',    (1<<6)),
+            ('Mod5',    (1<<7)),
+            ]
+
+class GrabKeyModifierMask(ctypes.c_uint, metaclass=BitmapMetaMaker(ctypes.c_uint)):
+    _bits_ = KeyModifierMask._bits_ + [('AnyModifier', (1<<15))]
+
 class ConfigureWindowStructure(ctypes.c_ulong, metaclass=BitmapMetaMaker(ctypes.c_ulong)):
     _bits_ = [
         ('CWX',             (1<<0)),
@@ -309,7 +324,7 @@ class XKeyEvent(ctypes.Structure):
             ('y', ctypes.c_int),
             ('x_root', ctypes.c_int),
             ('y_root', ctypes.c_int),
-            ('state', ctypes.c_uint),
+            ('state', KeyModifierMask),
             ('keycode', ctypes.c_uint),
             ('same_screen', Bool),
             ]
@@ -572,3 +587,30 @@ class InputFocus(ctypes.c_int, EnumMixin):
 
 # int XSetInputFocus(Display *display, Window focus, int revert_to, Time time);
 xlib.XSetInputFocus.argtypes = display_p, Window, ctypes.c_int, Time
+
+# X.h
+KeySym = XID
+KeyCode = ctypes.c_ubyte
+keycode_p = byte_p
+
+# Xlib.h
+class ModifierKeymap(ctypes.Structure):
+    _fields_ = [
+            ('max_keypermod', ctypes.c_int),
+            ('modifiermap', keycode_p),
+            ]
+modifierkeymap_p = ctypes.POINTER(ModifierKeymap)
+
+# int XDisplayKeycodes(Display *display, int *min_keycodes_return, int *max_keycodes_return);
+xlib.XDisplayKeycodes.argtypes = display_p, int_p, int_p
+
+# KeySym *XGetKeyboardMapping(Display *display, KeyCode first_keycode, int keycode_count, int *keysyms_per_keycode_return);
+xlib.XGetKeyboardMapping.restype = ctypes.POINTER(KeySym)
+xlib.XGetKeyboardMapping.argtypes = display_p, KeyCode, ctypes.c_int, int_p
+
+# XModifierKeymap *XGetModifierMapping(Display *display);
+xlib.XGetModifierMapping.restype = modifierkeymap_p
+xlib.XGetModifierMapping.argtypes = display_p,
+
+## Keys
+NoSymbol = 0
