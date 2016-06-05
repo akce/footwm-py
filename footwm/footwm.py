@@ -17,7 +17,8 @@ import footwm.log
 log = footwm.log.make(handler=logging.FileHandler('debug.log'))
 log.addHandler(logging.StreamHandler())
 
-def logkey(wm, window, keysym, keycode, modifiers):
+def logkey(keyargs):
+    wm, window, keysym, keycode, modifiers = keyargs
     log.debug('0x%08x: logkey keysym=%s keycode=%d modifiers=0x%x', window.window, keysym, keycode, modifiers)
 
 class WindowError(Exception):
@@ -483,7 +484,8 @@ class Foot(object):
             except KeyError:
                 log.error('0x%08x: no function for keysym=%s', e.window, keysym)
             else:
-                keyfunc(self, find_window(self.root, e.window), keysym, e.keycode, e.state.value)
+                keyargs = (self, find_window(self.root, e.window), keysym, e.keycode, e.state.value)
+                keyfunc(keyargs=keyargs)
 
     def handle_mappingnotify(self, event):
         """ X server has had a keyboard mapping changed. Update our keyboard layer. """
