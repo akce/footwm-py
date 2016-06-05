@@ -76,6 +76,7 @@ Bool = ctypes.c_bool
 byte_p = ctypes.POINTER(ctypes.c_ubyte)
 ulong_p = ctypes.POINTER(ctypes.c_ulong)
 int_p = ctypes.POINTER(ctypes.c_int)
+char_p = ctypes.POINTER(ctypes.c_char)
 
 ## Opaque pointer types.
 class Display(ctypes.Structure):
@@ -376,8 +377,10 @@ class XEvent(ctypes.Union):
             ('pad', ctypes.c_long * 24),
             ]
 
+xevent_p = ctypes.POINTER(XEvent)
+
 # int XNextEvent(Display *display, XEvent *event_return);
-xlib.XNextEvent.argtypes = display_p, ctypes.POINTER(XEvent)
+xlib.XNextEvent.argtypes = display_p, xevent_p
 
 ## Event definitions. See X.h
 class InputEventMask(ctypes.c_long, metaclass=BitmapMetaMaker(ctypes.c_long)):
@@ -409,6 +412,9 @@ class InputEventMask(ctypes.c_long, metaclass=BitmapMetaMaker(ctypes.c_long)):
             ('ColormapChange',      (1 << 23)),
             ('OwnerGrabButton',     (1 << 24)),
             ]
+
+# int XMaskEvent(Display *display, long event_mask, XEvent *event_return);
+xlib.XMaskEvent.argtypes = display_p, InputEventMask, xevent_p
 
 class EventName(ctypes.c_int, EnumMixin):
     KeyPress            = 2
@@ -518,8 +524,8 @@ class XClassHint(ctypes.Structure):
     _fields_ = [
             # NOTE: do *not* use c_char_p here. ctypes will automatically convert them to python str and discard the c-pointers. We have to retain
             # the pointers in order to free them via xlib.XFree. Clients will need to cast these to c_char_p before creating the str.
-            ('res_name', ctypes.POINTER(ctypes.c_char)),
-            ('res_class', ctypes.POINTER(ctypes.c_char)),
+            ('res_name', char_p),
+            ('res_class', char_p),
             ]
 
 # Status XGetClassHint(Display *display, Window w, XClassHint *class_hints_return);
@@ -614,3 +620,20 @@ xlib.XGetModifierMapping.argtypes = display_p,
 
 ## Keys
 NoSymbol = 0
+AnyKey = 0
+
+class GrabMode(ctypes.c_int, EnumMixin):
+    Sync =  0
+    Async = 1
+
+# int XGrabKey(Display *display, int keycode, unsigned int modifiers, Window grab_window, Bool owner_events, int pointer_mode, int keyboard_mode);
+#xlib.XGrabKey.argtypes = display_p, ctypes.c_int, KeyModifierMask, Window, Bool, GrabMode, GrabMode
+xlib.XGrabKey.argtypes = display_p, KeyCode, GrabKeyModifierMask, Window, Bool, GrabMode, GrabMode
+
+# int XUngrabKey(Display *display, int keycode, unsigned int modifiers, Window grab_window);
+#xlib.XUngrabKey.argtypes = display_p, ctypes.c_int, ctypes.c_uint, Window
+xlib.XUngrabKey.argtypes = display_p, KeyCode, GrabKeyModifierMask, Window
+
+# char *XKeysymToString(KeySym keysym);
+#xlib.XKeysymToString.restype = char_p
+#xlib.XKeysymToString.argtypes = KeySym,

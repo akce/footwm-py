@@ -4,7 +4,7 @@ Dump X keyboard keys.
 
 Small script to see how X keycodes & modifiers are all tied together.
 
-Copyright (c) 2016 Jerry Kotland
+Copyright (c) 2016 Akce
 """
 import ctypes
 import pprint
@@ -18,3 +18,5 @@ if __name__ == '__main__':
     pprint.pprint(keyboard.keysymgroups, width=200)
     pprint.pprint(keyboard.keymodifiercodes, width=200)
     pprint.pprint(keyboard.keymodifiersyms, width=200)
+    pprint.pprint(keyboard.keycodes, width=200)
+    pprint.pprint(keyboard.modifiers, width=200)

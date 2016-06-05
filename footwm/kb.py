@@ -1,9 +1,10 @@
 """
 Keyboard module for footwm.
 
-Copyright (c) 2016 Jerry Kotland
+Copyright (c) 2016 Akce
 """
 import ctypes
+import itertools
 
 from . import keydefs
 from . import xlib
@@ -23,10 +24,16 @@ class KeySym:
 
     def __init__(self, keysymid):
         self.keysymid = keysymid
+        self.name = keydefs.keysymnames.get(self.keysymid, '???')
+
+    def __hash__(self):
+        return hash(self.keysymid)
+
+    def __eq__(self, other):
+        return self.keysymid == other.keysymid
 
     def __str__(self):
-        name = keydefs.keysymnames.get(self.keysymid, '???')
-        return '{}:0x{:x}'.format(name, self.keysymid)
+        return '{}:0x{:x}'.format(self.name, self.keysymid)
 
     def __repr__(self):
         """ pprint uses repr to print, so make this nice for our text output. """
@@ -39,6 +46,9 @@ class Keyboard:
         self._load_keysymgroups()
         self._load_keymodifiercodes()
         self._load_keymodifiersyms()
+        self._load_modifiers()
+        self._load_keycodes()
+        self._load_keysyms()
 
     def _load_keysymgroups(self):
         """ List of keycodes and their keysym groups. """
@@ -70,3 +80,47 @@ class Keyboard:
     def _load_keymodifiersyms(self):
         """ Keymodifier map has modifiers mapped to keysym groups. """
         self.keymodifiersyms = dict([(modname, [self.keysymgroups.get(k, None) for k in kcodes]) for modname, kcodes in self.keymodifiercodes.items()])
+
+    def _keycodes(self):
+        """ Return keysym -> keycode, modifier. raise AttributeError if unknown. """
+        for keycode, keysyms in self.keysymgroups.items():
+            keya = keysyms[0]
+            keyb = keysyms[1]
+            if keyb.keysymid == xlib.NoSymbol:
+                # keyb is the same as keya.
+                realkeyb = keya
+            else:
+                realkeyb = keyb
+            yield keya, (keycode, 0)
+            if keya != realkeyb:
+                if realkeyb.name.startswith('KP_'):
+                    modifier = self.modifiers['NumLock']
+                else:
+                    modifier = self.modifiers['ShiftLock']
+                yield realkeyb, (keycode, modifier)
+
+    def _load_keycodes(self):
+        """ Creates a dict(keysym: (keycode, modifiermask)) """
+        self.keycodes = {keysym.name: keymod for keysym, keymod in self._keycodes()}
+
+    def _load_keysyms(self):
+        """ Creates a dict((keycode, modifiermask): keysym) """
+        self.keysyms = {v: k for k, v in self.keycodes.items()}
+
+    def _load_modifiers(self):
+        self.modifiers = {'ShiftLock': xlib.KeyModifierMask.Shift}
+        for modname, keygroups in self.keymodifiersyms.items():
+            for keygroup in keygroups:
+                # Look in only the first two keys. ie, we don't support mode-switch.
+                try:
+                    for keysym in keygroup[:2]:
+                        if keysym.name in ['Alt_L', 'Alt_R', 'Meta_L', 'Meta_R']:
+                            self.modifiers['Alt'] = getattr(xlib.KeyModifierMask, modname)
+                        elif keysym.name in ['Super_L', 'Super_R']:
+                            self.modifiers['Super'] = getattr(xlib.KeyModifierMask, modname)
+                        elif keysym.name == 'Num_Lock':
+                            self.modifiers['NumLock'] = getattr(xlib.KeyModifierMask, modname)
+                        elif keysym.name == 'Scroll_Lock':
+                            self.modifiers['ScrollLock'] = getattr(xlib.KeyModifierMask, modname)
+                except TypeError:
+                    pass

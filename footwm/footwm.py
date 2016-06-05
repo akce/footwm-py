@@ -11,10 +11,14 @@ import sys
 
 # Local modules.
 import footwm.xlib as xlib
+import footwm.kb as kb
 import footwm.log
 
 log = footwm.log.make(handler=logging.FileHandler('debug.log'))
 log.addHandler(logging.StreamHandler())
+
+def logkey(wm, window, keysym, keycode, modifiers):
+    log.debug('0x%08x: logkey keysym=%s keycode=%d modifiers=0x%x', window.window, keysym, keycode, modifiers)
 
 class WindowError(Exception):
     pass
@@ -265,10 +269,15 @@ class Foot(object):
         self._atoms = {}
         self.display = xlib.xlib.XOpenDisplay(displayname)
         log.debug('%s: connect displayname=%s', self.__class__.__name__, displayname) #, self.display.contents)
+        self.keyboard = kb.Keyboard(self.display)
+        self.keymap = {
+                'F5': logkey,
+                }
         self._init_atoms()
         self._load_root()
         self._install_wm()
         self._make_handlers()
+        self.install_keymap()
         self._show()
 
     def _load_root(self):
@@ -284,12 +293,31 @@ class Foot(object):
         # FIXME need a better organisation for shared atoms...
         Window.atoms = self._atoms
 
+    def clear_keymap(self):
+        for w in self.root.children:
+            xlib.xlib.XUngrabKey(self.display, xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, w)
+
+    def install_keymap(self, windows=None):
+        """ Installs the window manager top level keymap to selected windows. Install to all managed windows if windows is None. """
+        if windows is None:
+            ws = self.root.children
+        else:
+            ws = windows
+        for keysymname in self.keymap:
+            # TODO handle locked modifiers scroll-lock, num-lock, caps-lock.
+            keycode, modifier = self.keyboard.keycodes[keysymname]
+            # XXX Should we install the keymap only when the window is focused?
+            for w in ws:
+                xlib.xlib.XGrabKey(self.display, keycode, modifier, w.window, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
+
     def _make_handlers(self):
         self.eventhandlers = {
                 xlib.EventName.CreateNotify:        self.handle_createnotify,
                 xlib.EventName.ConfigureNotify:     self.handle_configurenotify,
                 xlib.EventName.ConfigureRequest:    self.handle_configurerequest,
                 xlib.EventName.DestroyNotify:       self.handle_destroynotify,
+                xlib.EventName.KeyPress:            self.handle_keypress,
+                xlib.EventName.MappingNotify:       self.handle_mappingnotify,
                 xlib.EventName.MapNotify:           self.handle_mapnotify,
                 xlib.EventName.MapRequest:          self.handle_maprequest,
                 xlib.EventName.UnmapNotify:         self.handle_unmapnotify,
@@ -308,6 +336,7 @@ class Foot(object):
                 # Once footwm finishes startup, we'll get it to show the highest priority window in the list.
                 # All normal windows are kept in the withdrawn state unless they're on the top of the MRU stack.
                 window.manage(xlib.InputEventMask.StructureNotify)
+                self.install_keymap(windows=[window])
                 log.debug('0x%08x: _add_window added to %s', window.window, parent)
             else:
                 log.error('0x%08x: _add_window parent 0x%08x not found, ignoring window', window.window, window.parent)
@@ -318,11 +347,9 @@ class Foot(object):
         # TODO assert all windows are withdrawn?
         visibles, hiddens = find_visible(self.root)
         for window in visibles:
-            window.manage(xlib.InputEventMask.StructureNotify)
             window.resize(self.root.geom)
             window.show()
             window.focus()
-            #window._load_window_attr()
             log.debug('0x%08x: showing window=%s', window.window, window)
         for window in hiddens:
             log.debug('0x%08x: hiding %s', window.window, window)
@@ -439,6 +466,31 @@ class Foot(object):
             else:
                 self.root.remove_child(w)
                 log.debug('0x%08x: removed from %s', w.window, p)
+
+    def handle_keypress(self, event):
+        """ User has pressed a key that we've grabbed. """
+        e = event.xkey
+        log.debug('0x%08x: handle_keypress keycode=0x%x modifiers=%s', e.window, e.keycode, e.state)
+        # Convert keycode to keysym and call the associated handler.
+        # TODO handle locked modifiers scroll-lock, num-lock, caps-lock.
+        try:
+            keysym = self.keyboard.keysyms[(e.keycode, e.state.value)]
+        except KeyError:
+            log.error('0x%08x: no keysym for (keycode, modifier)', e.window)
+        else:
+            try:
+                keyfunc = self.keymap[keysym]
+            except KeyError:
+                log.error('0x%08x: no function for keysym=%s', e.window, keysym)
+            else:
+                keyfunc(self, find_window(self.root, e.window), keysym, e.keycode, e.state.value)
+
+    def handle_mappingnotify(self, event):
+        """ X server has had a keyboard mapping changed. Update our keyboard layer. """
+        self.clear_keymap()
+        # Recreate keyboard settings.
+        self.keyboard = kb.Keyboard(self.display)
+        self.install_keymap()
 
     def handle_mapnotify(self, event):
         # Server has displayed the window.
