@@ -30,7 +30,16 @@ if __name__ == '__main__':
         p("        ('{}', 0x{:08x}),".format(k, v))
     p('        ])')
     # Output the keysym names dict.
+    # Note that some keycodes have multiple keysyms!!
+    # We'll keep only the first definition and discard the rest.
+    keycodes = dict()
     p('keysymnames = dict([')
     for k, v in keypairs:
-        p("        (0x{:08x}, '{}'),".format(v, k))
+        if v in keycodes:
+            msg = "keycode 0x{:08x} already has keysym {}. Ignoring new keysym {}".format(v, keycodes[v], k)
+            print(msg, file=sys.stderr)
+            p('# {}'.format(msg))
+        else:
+            p("        (0x{:08x}, '{}'),".format(v, k))
+            keycodes[v] = k
     p('        ])')
