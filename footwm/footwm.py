@@ -6,6 +6,7 @@ Copyright (c) 2016 Akce
 
 # Python standard modules.
 import ctypes   # TODO xlib needs to abstract enough so clients don't need ctypes!
+import functools
 import logging
 import sys
 
@@ -272,7 +273,10 @@ class Foot(object):
         log.debug('%s: connect displayname=%s', self.__class__.__name__, displayname) #, self.display.contents)
         self.keyboard = kb.Keyboard(self.display)
         self.keymap = {
-                'F5': logkey,
+                'F5': functools.partial(self.pick_child, 1),
+                'F6': functools.partial(self.pick_child, 2),
+                'F7': functools.partial(self.pick_child, 3),
+                'F8': functools.partial(self.pick_child, 4),
                 }
         self._init_atoms()
         self._load_root()
@@ -341,6 +345,18 @@ class Foot(object):
                 log.debug('0x%08x: _add_window added to %s', window.window, parent)
             else:
                 log.error('0x%08x: _add_window parent 0x%08x not found, ignoring window', window.window, window.parent)
+
+    def pick_child(self, index, keyargs=None):
+        """ Pick a child window to bring to front. """
+        # TODO handle transients, window groups etc.
+        # TODO some of this could be moved into a RootWindow class.
+        try:
+            child = self.root.children.pop(index)
+        except IndexError:
+            log.warning('0x{:08x}: pick_child index={} out of bounds. children len={}'.format(self.root.window, index, len(self.root.children)))
+        else:
+            self.root.children.insert(0, child)
+            self._show()
 
     def _show(self):
         """ Show the highest priority window. """
