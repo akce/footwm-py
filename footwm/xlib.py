@@ -152,9 +152,12 @@ xerrorhandler_p = ctypes.CFUNCTYPE(ctypes.c_int, display_p, xerrorevent_p)
 xlib.XSetErrorHandler.restype = xerrorhandler_p
 xlib.XSetErrorHandler.argtypes = xerrorhandler_p,
 
+# Need to keep a reference to xerrorhandler_p object to stop it being gc'd.
+currxerrorhandler = None
 def XSetErrorHandler(handler):
-    # XXX Need to keep a reference to xerrorhandler_p object to stop it being gc'd.
-    return xlib.XSetErrorHandler(xerrorhandler_p(handler))
+    global currxerrorhandler
+    currxerrorhandler = xerrorhandler_p(handler)
+    return xlib.XSetErrorHandler(currxerrorhandler)
 
 # int XSelectInput(Display *display, Window w, long event_mask);
 xlib.XSelectInput.argtypes = display_p, Window, ctypes.c_long
