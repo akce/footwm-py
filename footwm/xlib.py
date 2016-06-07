@@ -462,6 +462,38 @@ class MapState(ctypes.c_int, EnumMixin):
     IsUnviewable    = 1
     IsViewable      = 2
 
+class WindowClass(ctypes.c_int, EnumMixin):
+    CopyFromParent  = 0
+    InputOutput     = 1
+    InputOnly       = 2
+
+class BitGravity(ctypes.c_int, EnumMixin):
+    Forget          = 0
+    NorthWest       = 1
+    North           = 2
+    NorthEast       = 3
+    West            = 4
+    Center          = 5
+    East            = 6
+    SouthWest       = 7
+    South           = 8
+    SouthEast       = 9
+    Static          = 10
+
+# WindowGravity == BitGravity ~= s/Forget/Unmap/
+class WindowGravity(ctypes.c_int, EnumMixin):
+    Unmap           = 0
+    NorthWest       = 1
+    North           = 2
+    NorthEast       = 3
+    West            = 4
+    Center          = 5
+    East            = 6
+    SouthWest       = 7
+    South           = 8
+    SouthEast       = 9
+    Static          = 10
+
 class XWindowAttributes(ctypes.Structure):
     _fields_ = [
             ('x', ctypes.c_int),
@@ -472,9 +504,9 @@ class XWindowAttributes(ctypes.Structure):
             ('depth', ctypes.c_int),
             ('visual', visual_p),
             ('root', Window),
-            ('class', ctypes.c_int),
-            ('bit_gravity', ctypes.c_int),
-            ('win_gravity', ctypes.c_int),
+            ('cls', WindowClass),
+            ('bit_gravity', BitGravity),
+            ('win_gravity', WindowGravity),
             ('backing_store', ctypes.c_int),
             ('backing_planes', ctypes.c_ulong),
             ('backing_pixel', ctypes.c_ulong),
@@ -488,6 +520,10 @@ class XWindowAttributes(ctypes.Structure):
             ('override_redirect', Bool),
             ('screen', screen_p),
             ]
+
+    def __str__(self):
+        # TODO for now only show non-footwm.Geometry info.
+        return 'borderw={} depth={} root=0x{:08x} class={} bitgravity={} wingravity={} map_state={}'.format(self.border_width, self.depth, self.root, self.cls, self.bit_gravity, self.win_gravity, self.map_state)
 
 # XChangeProperty modes. See X.h
 class PropMode(ctypes.c_int, EnumMixin):
