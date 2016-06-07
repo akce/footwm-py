@@ -283,6 +283,7 @@ class Foot(object):
         self._install_wm()
         self._make_handlers()
         self.install_keymap()
+        self.install_keymap(windows=[self.root])
         self._show()
 
     def _load_root(self):
