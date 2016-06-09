@@ -92,6 +92,23 @@ class Window(object):
     def focus(self):
         xlib.xlib.XSetInputFocus(self.display, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
 
+    def delete(self):
+        """ Sends the WM_PROTOCOLS - WM_DELETE_WINDOW message. """
+        # TODO: Check if the window supports WM_DELETE_WINDOW before sending. Not sure how important this is, every window I've seen implements it.
+        ev = xlib.XClientMessageEvent()
+        ev.type = xlib.EventName.ClientMessage
+        ev.window = self.window
+        ev.message_type = self.atoms[b'WM_PROTOCOLS']
+        ev.format = 32
+        ev.data.l[0] = self.atoms[b'WM_DELETE_WINDOW']
+        ev.data.l[1] = xlib.CurrentTime;
+
+        status = xlib.xlib.XSendEvent(self.display, self.window, False, xlib.InputEventMask.NoEvent, ctypes.cast(ctypes.byref(ev), xlib.xevent_p))
+        if status == 0:
+            log.error('0x%08x: WM_DELETE_WINDOW failed', self.window)
+        else:
+            log.debug('0x%08x: WM_DELETE_WINDOW success', self.window)
+
     @property
     def unmapped(self):
         return self.map_state == self.map_state.IsUnmapped
@@ -277,6 +294,7 @@ class Foot(object):
                 'F6': functools.partial(self.pick_child, 2),
                 'F7': functools.partial(self.pick_child, 3),
                 'F8': functools.partial(self.pick_child, 4),
+                'F9': functools.partial(self.delete_window, 0),
                 }
         self._init_atoms()
         self._load_root()
@@ -296,6 +314,8 @@ class Foot(object):
         def aa(symbol, only_if_exists=False):
             self._atoms[symbol] = xlib.xlib.XInternAtom(self.display, symbol, only_if_exists)
         aa(b'WM_STATE')
+        aa(b'WM_PROTOCOLS')
+        aa(b'WM_DELETE_WINDOW')
         # FIXME need a better organisation for shared atoms...
         Window.atoms = self._atoms
 
@@ -372,6 +392,16 @@ class Foot(object):
         for window in hiddens:
             log.debug('0x%08x: hiding %s', window.window, window)
             window.hide()
+
+    def delete_window(self, index, keyargs=None):
+        """ Delete a window. """
+        try:
+            w = self.root.children[index]
+        except IndexError:
+            pass
+        else:
+            w.delete()
+            # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
 
     def _install_wm(self):
         """ Install foot as *the* window manager. """
@@ -483,7 +513,8 @@ class Foot(object):
                 log.debug('0x%08x: not found in root %s', e.window, self.root)
             else:
                 self.root.remove_child(w)
-                log.debug('0x%08x: removed from %s', w.window, p)
+                log.debug('0x%08x: removed from root 0x%08x', w.window, self.root.window)
+            self._show()
 
     def handle_keypress(self, event):
         """ User has pressed a key that we've grabbed. """
@@ -561,7 +592,7 @@ class Foot(object):
                         self.root.remove_child(window)
                     log.debug('0x%08x: Unmap successful %s', e.window, window)
                     # Since the window has been unmapped(hidden) show the next window in the list.
-                    self._show()
+                self._show()
 
     def __del__(self):
         xlib.xlib.XCloseDisplay(self.display)

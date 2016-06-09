@@ -220,6 +220,24 @@ class XAnyEvent(ctypes.Structure):
             ('window', Window),
             ]
 
+class XClientMessageEvent(ctypes.Structure):
+    class _Data(ctypes.Union):
+        _fields_ = [
+                ('b', ctypes.c_char * 20),
+                ('s', ctypes.c_short * 10),
+                ('l', ctypes.c_long * 5),
+                ]
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('window', Window),
+            ('message_type', Atom),
+            ('format', ctypes.c_int),
+            ('data', _Data),
+            ]
+
 class StackingMethod(ctypes.c_int, EnumMixin):
     Above =     0
     Below =     1
@@ -369,6 +387,7 @@ class XEvent(ctypes.Union):
     _fields_ = [
             ('type', ctypes.c_int),
             ('xany', XAnyEvent),
+            ('xclient', XClientMessageEvent),
             ('xcreatewindow', XCreateWindowEvent),
             ('xconfigure', XConfigureEvent),
             ('xconfigurerequest', XConfigureRequestEvent),
@@ -418,6 +437,10 @@ class InputEventMask(ctypes.c_long, metaclass=BitmapMetaMaker(ctypes.c_long)):
 
 # int XMaskEvent(Display *display, long event_mask, XEvent *event_return);
 xlib.XMaskEvent.argtypes = display_p, InputEventMask, xevent_p
+
+# Status XSendEvent(Display *display, Window w, Bool propagate, long event_mask, XEvent *event_send);
+xlib.XSendEvent.restype = Status
+xlib.XSendEvent.argtypes = display_p, Window, Bool, InputEventMask, xevent_p
 
 class EventName(ctypes.c_int, EnumMixin):
     KeyPress            = 2
