@@ -90,7 +90,12 @@ class Window(object):
         xlib.xlib.XMapWindow(self.display, self.window)
 
     def focus(self):
-        xlib.xlib.XSetInputFocus(self.display, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
+        msg = b'WM_TAKE_FOCUS'
+        try:
+            self.clientmessage(msg)
+        except KeyError:
+            #log.debug('0x%08x: %s not supported', self.window, msg)
+            xlib.xlib.XSetInputFocus(self.display, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
 
     def _sendclientmessage(self, atom, time):
         """ Send a ClientMessage event to window. """
@@ -355,6 +360,7 @@ class Foot(object):
         aa(b'WM_STATE')
         aa(b'WM_PROTOCOLS')
         aa(b'WM_DELETE_WINDOW')
+        aa(b'WM_TAKE_FOCUS')
         # FIXME need a better organisation for shared atoms...
         Window.atoms = self._atoms
 
