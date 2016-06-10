@@ -92,22 +92,36 @@ class Window(object):
     def focus(self):
         xlib.xlib.XSetInputFocus(self.display, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
 
-    def delete(self):
-        """ Sends the WM_PROTOCOLS - WM_DELETE_WINDOW message. """
-        # TODO: Check if the window supports WM_DELETE_WINDOW before sending. Not sure how important this is, every window I've seen implements it.
+    def _sendclientmessage(self, atom, time):
+        """ Send a ClientMessage event to window. """
         ev = xlib.XClientMessageEvent()
         ev.type = xlib.EventName.ClientMessage
         ev.window = self.window
         ev.message_type = self.atoms[b'WM_PROTOCOLS']
         ev.format = 32
-        ev.data.l[0] = self.atoms[b'WM_DELETE_WINDOW']
-        ev.data.l[1] = xlib.CurrentTime;
-
+        ev.data.l[0] = atom
+        ev.data.l[1] = time
         status = xlib.xlib.XSendEvent(self.display, self.window, False, xlib.InputEventMask.NoEvent, ctypes.cast(ctypes.byref(ev), xlib.xevent_p))
-        if status == 0:
-            log.error('0x%08x: WM_DELETE_WINDOW failed', self.window)
+        return status != 0
+
+    def clientmessage(self, msg, time=xlib.CurrentTime):
+        """ Send a ClientMessage event to client.
+        Will raise a KeyError if WM_PROTOCOLS does not support the msg type. """
+        atom = self.wm_protocols[msg]
+        status = self._sendclientmessage(atom, time)
+        if status:
+            log.debug('0x%08x: %s success', self.window, msg)
         else:
-            log.debug('0x%08x: WM_DELETE_WINDOW success', self.window)
+            log.error('0x%08x: %s failed', self.window, msg)
+
+    def delete(self):
+        """ Sends the WM_PROTOCOLS - WM_DELETE_WINDOW message. """
+        # XXX Should we fallback to a destroy window call if this isn't supported?
+        msg = b'WM_DELETE_WINDOW'
+        try:
+            self.clientmessage(msg)
+        except KeyError:
+            log.debug('0x%08x: %s not supported', self.window, msg)
 
     @property
     def unmapped(self):
@@ -183,14 +197,15 @@ class Window(object):
             aids = [catoms[i] for i in range(ncount.value)]
             xlib.xlib.XFree(catoms)
             atomnames = {v: k for k, v in self.atoms.items()}
-            for a in aids:
+            for aid in aids:
                 try:
-                    protocols[atomnames[a]] = a
+                    aname = atomnames[aid]
                 except KeyError:
-                    aname = xlib.xlib.XGetAtomName(self.display, a)
-                    log.debug('0x%08x: Unsupported WM_PROTOCOL atom %s=%d', self.window, aname, a)
-                    protocols[aname] = a
-                    xlib.xlib.XFree(aname)
+                    caname = xlib.xlib.XGetAtomName(self.display, aid)
+                    aname = str(ctypes.cast(caname, ctypes.c_char_p).value, 'latin1')
+                    xlib.xlib.XFree(caname)
+                    log.debug('0x%08x: Unsupported WM_PROTOCOL atom %s=%d', self.window, aname, aid)
+                protocols[aname] = aid
         return protocols
 
     @property
