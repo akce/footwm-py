@@ -173,6 +173,27 @@ class Window(object):
         return name
 
     @property
+    def wm_protocols(self):
+        """ Return dict(name -> atom) of ATOMs comprising supported WM_PROTOCOLS for the client window. """
+        catoms = xlib.atom_p()
+        ncount = ctypes.c_int()
+        status = xlib.xlib.XGetWMProtocols(self.display, self.window, ctypes.byref(catoms), ctypes.byref(ncount))
+        protocols = {}
+        if status != 0:
+            aids = [catoms[i] for i in range(ncount.value)]
+            xlib.xlib.XFree(catoms)
+            atomnames = {v: k for k, v in self.atoms.items()}
+            for a in aids:
+                try:
+                    protocols[atomnames[a]] = a
+                except KeyError:
+                    aname = xlib.xlib.XGetAtomName(self.display, a)
+                    log.debug('0x%08x: Unsupported WM_PROTOCOL atom %s=%d', self.window, aname, a)
+                    protocols[aname] = a
+                    xlib.xlib.XFree(aname)
+        return protocols
+
+    @property
     def wm_state(self):
         state = None
         a = ctypes.byref        # a = address shorthand.
@@ -269,6 +290,9 @@ class Window(object):
             args.append('res_name="{}"'.format(self.res_name))
         if self.res_class:
             args.append('res_class="{}"'.format(self.res_class))
+        protocols = self.wm_protocols
+        if protocols:
+            args.append('wm_protocols={}'.format(str(protocols)))
         if self.parent:
             args.append('parent=0x{:08x}'.format(self.parent))
         if self.transientfor:

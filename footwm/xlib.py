@@ -594,6 +594,14 @@ class XClassHint(ctypes.Structure):
 xlib.XGetClassHint.restype = Status
 xlib.XGetClassHint.argtypes = display_p, Window, ctypes.POINTER(XClassHint)
 
+# char *XGetAtomName(Display *display, Atom atom);
+xlib.XGetAtomName.restype = char_p
+xlib.XGetAtomName.argtypes = display_p, Atom
+
+# Status XGetWMProtocols(Display *display, Window w, Atom **protocols_return, int *count_return);
+xlib.XGetWMProtocols.restype = Status
+xlib.XGetWMProtocols.argtypes = display_p, Window, ctypes.POINTER(atom_p), int_p,
+
 class XWindowChanges(ctypes.Structure):
     _fields_ = [
             ('x', ctypes.c_int),
