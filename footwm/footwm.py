@@ -97,6 +97,11 @@ class Window(object):
             #log.debug('0x%08x: %s not supported', self.window, msg)
             xlib.xlib.XSetInputFocus(self.display, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
 
+    def _sendevent(self, event, eventtype=xlib.InputEventMask.NoEvent):
+        """ Do the fancy ctypes event casting before calling XSendEvent. """
+        status = xlib.xlib.XSendEvent(self.display, self.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
+        return status != 0
+
     def _sendclientmessage(self, atom, time):
         """ Send a ClientMessage event to window. """
         ev = xlib.XClientMessageEvent()
@@ -106,8 +111,7 @@ class Window(object):
         ev.format = 32
         ev.data.l[0] = atom
         ev.data.l[1] = time
-        status = xlib.xlib.XSendEvent(self.display, self.window, False, xlib.InputEventMask.NoEvent, ctypes.cast(ctypes.byref(ev), xlib.xevent_p))
-        return status != 0
+        return self._sendevent(ev)
 
     def clientmessage(self, msg, time=xlib.CurrentTime):
         """ Send a ClientMessage event to client.
@@ -254,13 +258,15 @@ class Window(object):
         astatus = xlib.xlib.XGetWindowAttributes(self.display, self.window, ctypes.byref(wa))
         if astatus > 0:
             # XGetWindowAttr completed successfully.
+            if wa.override_redirect:
+                # No point doing anything else with override_redirect windows. We don't manage them.
+                raise WindowError('Ignore window, override_redirect is True')
             # Extract the parts of XWindowAttributes that we need.
             self.geom = Geometry(wa)
-            self.override_redirect = wa.override_redirect
-            self.map_state = wa.map_state
+            self.map_state = wa.map_state.value
+            log.debug('0x%08x: windowattr=%s', self.window, wa)
         else:
-            log.error('0x%08x: XGetWindowAttributes failed!', self.window)
-            raise WindowError()
+            raise WindowError('XGetWindowAttributes failed')
 
     def get_children(self):
         a = ctypes.byref        # a = address shorthand.
@@ -274,15 +280,6 @@ class Window(object):
         if nchildren.value > 0:
             xlib.xlib.XFree(childrenp)
         return children
-
-    def import_children(self):
-        for w in self.get_children():
-            try:
-                window = Window(self.display, w, self.window)
-            except WindowError:
-                pass
-            else:
-                self.children.append(window)
 
     def _load_transientfor(self):
         # Is the window a transient (eg, a modal dialog box for another window?)
@@ -304,7 +301,6 @@ class Window(object):
                 'name="{}"'.format(self.name),
                 str(self.geom),
                 'mapstate={}'.format(self.map_state),
-                'override_redirect={}'.format(self.override_redirect),
                 ]
         if self.res_name:
             args.append('res_name="{}"'.format(self.res_name))
@@ -351,8 +347,32 @@ class Foot(object):
     def _load_root(self):
         # TODO: worry about screens, displays, xrandr and xinerama!
         self.root = Window(self.display, xlib.xlib.XDefaultRootWindow(self.display))
-        self.root.import_children()
+        self._import_children()
         log.debug('0x%08x: _load_root %s', self.root.window, self.root)
+
+    def _import_children(self):
+        for w in self.root.get_children():
+            try:
+                window = Window(self.display, w, self.root.window)
+            except WindowError as e:
+                log.debug('0x%08x: import error %s', w, str(e))
+            else:
+                # WindowError will handle cases where override_redirect=True & XWindowAttributes fails.
+                # We have two extra restrictions when importing windows at program startup.
+                # Allow import of windows that have MapState=IsViewable, or WM_STATE exists.
+                # This is because X has an extra restriction about windows to manage. ie, X apps can create children of the
+                # root window, with their override_redirect=False but never Map them and the window manager then has to ignore them.
+                # With these checks we're assuming that IsViewable means the window will want to Map itself or that a prior window
+                # manager decided to manage the window and added a WM_STATE attribute so we'll manage it too.
+                if window.map_state == xlib.MapState.IsViewable:
+                    append = True
+                elif window.wm_state is not None:
+                    append = True
+                else:
+                    append = False
+                if append:
+                    self.root.children.append(window)
+                    self._manage_window(window)
 
     def _init_atoms(self):
         def aa(symbol, only_if_exists=False):
@@ -394,23 +414,25 @@ class Foot(object):
                 xlib.EventName.UnmapNotify:         self.handle_unmapnotify,
                 }
 
-    def _add_window(self, window):
-        if window.override_redirect:
-            log.debug('0x%08x: _add_window ignoring, override_redirect is True', window.window)
-            # XXX Add to a list as well?
+    def _add_window(self, w):
+        try:
+            window = Window(self.display, w, self.root.window)
+        except WindowError as e:
+            log.debug('0x%08x: %s', w, str(e))
+            added = False
         else:
-            # Find the parent window object and insert this window into its children list.
-            parent = find_window(self.root, window.parent)
-            if parent:
-                parent.children.insert(0, window)
-                # Add the window to our known list and make sure it's withdrawn (not-visible).
-                # Once footwm finishes startup, we'll get it to show the highest priority window in the list.
-                # All normal windows are kept in the withdrawn state unless they're on the top of the MRU stack.
-                window.manage(xlib.InputEventMask.StructureNotify)
-                self.install_keymap(windows=[window])
-                log.debug('0x%08x: _add_window added to %s', window.window, parent)
-            else:
-                log.error('0x%08x: _add_window parent 0x%08x not found, ignoring window', window.window, window.parent)
+            # Add the window to our known list and start managing.
+            self.root.children.insert(0, window)
+            self._manage_window(window)
+            added = True
+        return added
+
+    def _manage_window(self, window):
+        # All normal windows are kept in the withdrawn state unless they're on the top of the MRU list.
+        window.manage(xlib.InputEventMask.StructureNotify)
+        self.install_keymap(windows=[window])
+        # XXX set wm_state here?
+        #log.debug('0x%08x: _add_window added to %s', window.window, parent)
 
     def pick_child(self, index, keyargs=None):
         """ Pick a child window to bring to front. """
@@ -496,8 +518,6 @@ class Foot(object):
         e = event.xcreatewindow
         geom = Geometry(e)
         log.debug('0x%08x: CreateNotify parent=0x%08x %s override_redirect=%s', e.window, e.parent, geom, e.override_redirect)
-        self._add_window(Window(self.display, e.window, e.parent))
-        self._show()
 
     def handle_configurenotify(self, event):
         # The X server has moved and/or resized window e.window
@@ -605,13 +625,13 @@ class Foot(object):
         w = event.xmaprequest.window
         window = find_window(self.root, w)
         log.debug('0x%08x: MapRequest known=%s', w, window is not None)
-        # Display if window is top of the display list.
-        if window is find_visible(self.root):
-            log.debug('0x%08x: window is top of the list, displaying', w)
-            xlib.xlib.XMapWindow(self.display, w)
+        if window is None:
+            p = event.xmaprequest.parent
+            if self._add_window(w):
+                self._show()
         else:
-            # Reject map request since the window is not to be displayed.
-            log.debug('0x%08x: window is not top of the list, not displaying', w)
+            # Put window to the top of the list.
+            self.pick_child(index=self.root.children.index(window))
 
     def handle_unmapnotify(self, event):
         e = event.xunmap
