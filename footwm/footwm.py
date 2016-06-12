@@ -60,10 +60,9 @@ def find_window(rootwin, win):
 
 class Window(object):
 
-    def __init__(self, display, window, parent=None):
+    def __init__(self, display, window):
         self.display = display
         self.window = window
-        self.parent = parent
         self.children = []
         self._load_window_attr()
         self.wantedgeom = self.geom
@@ -309,8 +308,6 @@ class Window(object):
         protocols = self.wm_protocols
         if protocols:
             args.append('wm_protocols={}'.format(str(protocols)))
-        if self.parent:
-            args.append('parent=0x{:08x}'.format(self.parent))
         if self.transientfor:
             args.append('transientfor=0x{:08x}'.format(self.transientfor))
         if self.children:
@@ -353,7 +350,7 @@ class Foot(object):
     def _import_children(self):
         for w in self.root.get_children():
             try:
-                window = Window(self.display, w, self.root.window)
+                window = Window(self.display, w)
             except WindowError as e:
                 log.debug('0x%08x: import error %s', w, str(e))
             else:
@@ -416,7 +413,7 @@ class Foot(object):
 
     def _add_window(self, w):
         try:
-            window = Window(self.display, w, self.root.window)
+            window = Window(self.display, w)
         except WindowError as e:
             log.debug('0x%08x: %s', w, str(e))
             added = False
