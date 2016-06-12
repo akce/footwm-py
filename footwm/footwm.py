@@ -45,18 +45,15 @@ def find_visible(rootwin, count=1):
     hidden = rootwin.children[count:]
     return visible, hidden
 
-def find_window(rootwin, win):
-    """ Find window object in a window hierarchy. """
-    if rootwin.window == win:
-        ret = rootwin
+def find_window(rootwin, window):
+    """ Find a child window object. """
+    try:
+        i = rootwin.children.index(window)
+    except IndexError:
+        child = None
     else:
-        for child in rootwin.children:
-            ret = find_window(child, win)
-            if ret is not None:
-                break
-        else:
-            ret = None
-    return ret
+        child = rootwin.children[i]
+    return child
 
 class Window(object):
 
