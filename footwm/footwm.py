@@ -269,7 +269,7 @@ class ClientWindow(BaseWindow):
         xlib.xlib.XMapWindow(self.display, self.window)
 
     def focus(self):
-        msg = b'WM_TAKE_FOCUS'
+        msg = 'WM_TAKE_FOCUS'
         try:
             self.clientmessage(msg)
         except KeyError:
@@ -281,7 +281,7 @@ class ClientWindow(BaseWindow):
         ev = xlib.XClientMessageEvent()
         ev.type = xlib.EventName.ClientMessage
         ev.window = self.window
-        ev.message_type = self.atoms[b'WM_PROTOCOLS']
+        ev.message_type = self.atoms['WM_PROTOCOLS']
         ev.format = 32
         ev.data.l[0] = atom
         ev.data.l[1] = time
@@ -300,7 +300,7 @@ class ClientWindow(BaseWindow):
     def delete(self):
         """ Sends the WM_PROTOCOLS - WM_DELETE_WINDOW message. """
         # XXX Should we fallback to a destroy window call if this isn't supported?
-        msg = b'WM_DELETE_WINDOW'
+        msg = 'WM_DELETE_WINDOW'
         try:
             self.clientmessage(msg)
         except KeyError:
@@ -353,7 +353,7 @@ class ClientWindow(BaseWindow):
     def wm_state(self):
         state = None
         a = ctypes.byref        # a = address shorthand.
-        WM_STATE = self.atoms[b'WM_STATE']
+        WM_STATE = self.atoms['WM_STATE']
         actual_type_return = xlib.Atom()
         actual_format_return = ctypes.c_int()
         nitems_return = ctypes.c_ulong(0)
@@ -379,7 +379,7 @@ class ClientWindow(BaseWindow):
         state.state = xlib.WmStateState(winstate)
         log.debug('0x%08x: Set WM_STATE state=%s', self.window, state.state)
         state.icon = 0
-        WM_STATE = self.atoms[b'WM_STATE']
+        WM_STATE = self.atoms['WM_STATE']
         data_p = ctypes.cast(ctypes.byref(state), xlib.byte_p)
         long_length = int(ctypes.sizeof(state) / ctypes.sizeof(ctypes.c_long))
         # Specify as 32 (longs), that way the Xlib client will handle endian translations.
@@ -456,11 +456,11 @@ class Foot(object):
 
     def _init_atoms(self):
         def aa(symbol, only_if_exists=False):
-            self._atoms[symbol] = xlib.xlib.XInternAtom(self.display, symbol, only_if_exists)
-        aa(b'WM_STATE')
-        aa(b'WM_PROTOCOLS')
-        aa(b'WM_DELETE_WINDOW')
-        aa(b'WM_TAKE_FOCUS')
+            self._atoms[symbol] = xlib.xlib.XInternAtom(self.display, bytes(symbol, 'utf8'), only_if_exists)
+        aa('WM_STATE')
+        aa('WM_PROTOCOLS')
+        aa('WM_DELETE_WINDOW')
+        aa('WM_TAKE_FOCUS')
         # FIXME need a better organisation for shared atoms...
         BaseWindow.atoms = self._atoms
 
