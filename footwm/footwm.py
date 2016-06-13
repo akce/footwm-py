@@ -39,48 +39,231 @@ class Geometry(object):
     def __str__(self):
         return '{}(x={}, y={}, w={}, h={})'.format(self.__class__.__name__, self.x, self.y, self.w, self.h)
 
-def find_visible(rootwin, count=1):
-    """ Partition the window list into windows that need to be displayed and those that need to be hidden. """
-    visible = rootwin.children[:count]
-    hidden = rootwin.children[count:]
-    return visible, hidden
-
-def find_window(rootwin, window):
-    """ Find a child window object. """
-    try:
-        i = rootwin.children.index(window)
-    except IndexError:
-        child = None
+def get_transientfor(display, windowid):
+    """ Is the window a transient (eg, a modal dialog box for another window?).
+    If it is, return that window's xwindow id. """
+    # TODO see how multiple windows are done for apps like gimp.
+    # TODO maybe WM_HINTS:WindowGroupHint
+    tf = xlib.Window()
+    tstatus = xlib.xlib.XGetTransientForHint(display, windowid, ctypes.byref(tf))
+    if tstatus > 0:
+        # window is transient, transientfor will contain the window id of the parent window.
+        log.debug('0x%08x: transientfor ret=%s for=%s', windowid, tstatus, tf.value)
+        transientfor = tf.value
     else:
-        child = rootwin.children[i]
-    return child
+        transientfor = None
+    return transientfor
 
-class Window(object):
+class BaseWindow(object):
 
     def __init__(self, display, window):
         self.display = display
         self.window = window
-        self.children = []
         self._load_window_attr()
-        self.wantedgeom = self.geom
-        self._load_transientfor()
-        wm_state = self.wm_state
         self.name = self.wm_name
-        self.res_name, self.res_class = self.wm_class
-
-    def hide(self):
-        xlib.xlib.XUnmapWindow(self.display, self.window)
 
     def manage(self, eventmask):
         # watch, maintain, manage, control etc.
         xlib.xlib.XSelectInput(self.display, self.window, eventmask)
 
-    def resize(self, geom):
-        # Actual geom will be set in the configure notify handler.
-        self.wantedgeom = geom
-        if self.wantedgeom != self.geom:
-            log.debug('0x%08x: attempt resize %s -> %s', self.window, self.geom, self.wantedgeom)
-            xlib.xlib.XMoveResizeWindow(self.display, self.window, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
+    def _sendevent(self, event, eventtype=xlib.InputEventMask.NoEvent):
+        """ Do the fancy ctypes event casting before calling XSendEvent. """
+        status = xlib.xlib.XSendEvent(self.display, self.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
+        return status != 0
+
+    def _xtext_to_lines(self, xtextprop):
+        lines = []
+        #enc = 'utf8'
+        enc = None
+        if xtextprop.encoding == xlib.XA.STRING:
+            # ICCCM 2.7.1 - XA_STRING == latin-1 encoding.
+            enc = 'latin1'
+        else:
+            atomname = xlib.xlib.XGetAtomName(self.display, xtextprop.encoding)
+            log.error('************ UNSUPPORTED TEXT ENCODING ATOM=%s %s', xtextprop.encoding, atomname)
+            xlib.xlib.XFree(atomname)
+        if enc:
+            nitems = ctypes.c_int()
+            list_return = ctypes.POINTER(ctypes.c_char_p)()
+            status = xlib.xlib.XTextPropertyToStringList(ctypes.byref(xtextprop), ctypes.byref(list_return), ctypes.byref(nitems))
+            if status > 0:
+                lines = [str(list_return[i], enc) for i in range(nitems.value)]
+                #log.debug('xtext lines %s', lines)
+                xlib.xlib.XFreeStringList(list_return)
+        return lines
+
+    @property
+    def wm_name(self):
+        name = None
+        xtp = xlib.XTextProperty()
+        status = xlib.xlib.XGetWMName(self.display, self.window, ctypes.byref(xtp))
+        if status > 0:
+            #log.debug('xtp %s', xtp)
+            if xtp.nitems > 0:
+                try:
+                    name = self._xtext_to_lines(xtp)[0]
+                except IndexError:
+                    pass
+                xlib.xlib.XFree(xtp.value)
+        log.debug('0x%08x: Get WM_NAME name=%s status=%d', self.window, name, status)
+        return name
+
+    def _load_window_attr(self):
+        wa = xlib.XWindowAttributes()
+        astatus = xlib.xlib.XGetWindowAttributes(self.display, self.window, ctypes.byref(wa))
+        if astatus > 0:
+            # XGetWindowAttr completed successfully.
+            if wa.override_redirect:
+                # No point doing anything else with override_redirect windows. We don't manage them.
+                raise WindowError('Ignore window, override_redirect is True')
+            # Extract the parts of XWindowAttributes that we need.
+            self.geom = Geometry(wa)
+            self.map_state = wa.map_state.value
+            log.debug('0x%08x: windowattr=%s', self.window, wa)
+        else:
+            raise WindowError('XGetWindowAttributes failed')
+
+    def __str__(self):
+        args = [
+                'id=0x{:08x}'.format(self.window),
+                'name="{}"'.format(self.name),
+                str(self.geom),
+                'mapstate={}'.format(self.map_state),
+                ]
+        # XXX Should abstract this better...
+        try:
+            if self.res_name:
+                args.append('res_name="{}"'.format(self.res_name))
+        except AttributeError:
+            pass
+        try:
+            if self.res_class:
+                args.append('res_class="{}"'.format(self.res_class))
+        except AttributeError:
+            pass
+        try:
+            protocols = self.wm_protocols
+        except AttributeError:
+            pass
+        else:
+            if protocols:
+                args.append('wm_protocols={}'.format(str(protocols)))
+        try:
+            if self.transientfor:
+                args.append('transientfor=0x{:08x}'.format(self.transientfor.window))
+        except AttributeError:
+            pass
+        try:
+            # RootWindow
+            if self.children:
+                args.append("children=[{}]".format(' '.join('0x{:08x}'.format(x.window) for x in self.children)))
+        except AttributeError:
+            pass
+        return '{}({})'.format(self.__class__.__name__, ' '.join(args))
+
+class RootWindow(BaseWindow):
+
+    def __init__(self, display, window):
+        super().__init__(display, window)
+        self._import_children()
+
+    def add_child(self, w):
+        window = self._make_window(w)
+        if window:
+            # Add the window to our known list and start managing.
+            self.children.insert(0, window)
+        return window
+
+    def _import_children(self):
+        self.children = []
+        for w in self.get_children():
+            window = self._make_window(w)
+            if window:
+                # WindowError will handle cases where override_redirect=True & XWindowAttributes fails.
+                # We have two extra restrictions when importing windows at program startup.
+                # Allow import of windows that have MapState=IsViewable, or WM_STATE exists.
+                # This is because X has an extra restriction about windows to manage. ie, X apps can create children of the
+                # root window, with their override_redirect=False but never Map them and the window manager then has to ignore them.
+                # With these checks we're assuming that IsViewable means the window will want to Map itself or that a prior window
+                # manager decided to manage the window and added a WM_STATE attribute so we'll manage it too.
+                if window.map_state == xlib.MapState.IsViewable:
+                    append = True
+                elif window.wm_state is not None:
+                    append = True
+                else:
+                    append = False
+                if append:
+                    self.children.append(window)
+
+    def _make_window(self, windowid):
+        """ Window object factory method.
+        Will handle creating Normal, Transient managed windows. """
+        transientfor = get_transientfor(self.display, windowid)
+        try:
+            if transientfor is None:
+                # Regular window.
+                window = NormalWindow(self.display, windowid)
+            else:
+                window = TransientWindow(self.display, windowid, self.find_child(transientfor))
+        except WindowError as e:
+            log.debug('0x%08x: %s', windowid, str(e))
+            window = None
+        else:
+            window.manage(xlib.InputEventMask.StructureNotify)
+        return window
+
+    def find_child(self, window):
+        """ Find a child window object. """
+        for w in self.children:
+            if window == w.window:
+                break
+        else:
+            w = None
+        return w
+
+    def get_children(self):
+        a = ctypes.byref        # a = address shorthand.
+        root_return = xlib.Window(0)
+        parent_of_root = xlib.Window(0)
+        childrenp = xlib.window_p()
+        nchildren = ctypes.c_uint(0)
+        # XXX assert that root_return == root?
+        status = xlib.xlib.XQueryTree(self.display, self.window, a(root_return), a(parent_of_root), a(childrenp), a(nchildren))
+        children = [childrenp[i] for i in range(nchildren.value)]
+        if nchildren.value > 0:
+            xlib.xlib.XFree(childrenp)
+        return children
+
+    def pick(self, index):
+        """ Select the family of windows that belong to the window at the given index. """
+        window = self.children[index]
+        # family accounts for transients
+        # TODO window groups. See ICCCM 4.1.11
+        family = window.family
+        for w in family:
+            self.children.remove(w)
+        for w in reversed(family):
+            self.children.insert(0, w)
+        return family
+
+    def remove_child(self, childwin):
+        try:
+            self.children.remove(childwin)
+        except ValueError:
+            log.error('0x%08x: Window.remove_child: childwin not found in children window=%s', self.window, childwin)
+
+class ClientWindow(BaseWindow):
+
+    def __init__(self, display, window):
+        super().__init__(display, window)
+        self.wantedgeom = self.geom
+        wm_state = self.wm_state
+        self.res_name, self.res_class = self.wm_class
+        # The family of windows for a normal client window is only itself.
+        self.family = [self]
+
+    def hide(self):
+        xlib.xlib.XUnmapWindow(self.display, self.window)
 
     def show(self):
         xlib.xlib.XMapWindow(self.display, self.window)
@@ -92,11 +275,6 @@ class Window(object):
         except KeyError:
             #log.debug('0x%08x: %s not supported', self.window, msg)
             xlib.xlib.XSetInputFocus(self.display, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
-
-    def _sendevent(self, event, eventtype=xlib.InputEventMask.NoEvent):
-        """ Do the fancy ctypes event casting before calling XSendEvent. """
-        status = xlib.xlib.XSendEvent(self.display, self.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
-        return status != 0
 
     def _sendclientmessage(self, atom, time):
         """ Send a ClientMessage event to window. """
@@ -128,36 +306,10 @@ class Window(object):
         except KeyError:
             log.debug('0x%08x: %s not supported', self.window, msg)
 
+    # XXX Currently unused.
     @property
     def unmapped(self):
         return self.map_state == self.map_state.IsUnmapped
-
-    def remove_child(self, childwin):
-        try:
-            self.children.remove(childwin)
-        except ValueError:
-            log.error('0x%08x: Window.remove_child: childwin not found in children window=%s', self.window, childwin)
-
-    def _xtext_to_lines(self, xtextprop):
-        lines = []
-        #enc = 'utf8'
-        enc = None
-        if xtextprop.encoding == xlib.XA.STRING:
-            # ICCCM 2.7.1 - XA_STRING == latin-1 encoding.
-            enc = 'latin1'
-        else:
-            atomname = xlib.xlib.XGetAtomName(self.display, xtextprop.encoding)
-            log.error('************ UNSUPPORTED TEXT ENCODING ATOM=%s %s', xtextprop.encoding, atomname)
-            xlib.xlib.XFree(atomname)
-        if enc:
-            nitems = ctypes.c_int()
-            list_return = ctypes.POINTER(ctypes.c_char_p)()
-            status = xlib.xlib.XTextPropertyToStringList(ctypes.byref(xtextprop), ctypes.byref(list_return), ctypes.byref(nitems))
-            if status > 0:
-                lines = [str(list_return[i], enc) for i in range(nitems.value)]
-                #log.debug('xtext lines %s', lines)
-                xlib.xlib.XFreeStringList(list_return)
-        return lines
 
     @property
     def wm_class(self):
@@ -174,22 +326,6 @@ class Window(object):
         else:
             ret = "", ""
         return ret
-
-    @property
-    def wm_name(self):
-        name = None
-        xtp = xlib.XTextProperty()
-        status = xlib.xlib.XGetWMName(self.display, self.window, ctypes.byref(xtp))
-        if status > 0:
-            #log.debug('xtp %s', xtp)
-            if xtp.nitems > 0:
-                try:
-                    name = self._xtext_to_lines(xtp)[0]
-                except IndexError:
-                    pass
-                xlib.xlib.XFree(xtp.value)
-        log.debug('0x%08x: Get WM_NAME name=%s status=%d', self.window, name, status)
-        return name
 
     @property
     def wm_protocols(self):
@@ -249,67 +385,45 @@ class Window(object):
         # Specify as 32 (longs), that way the Xlib client will handle endian translations.
         xlib.xlib.XChangeProperty(self.display, self.window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
 
-    def _load_window_attr(self):
-        wa = xlib.XWindowAttributes()
-        astatus = xlib.xlib.XGetWindowAttributes(self.display, self.window, ctypes.byref(wa))
-        if astatus > 0:
-            # XGetWindowAttr completed successfully.
-            if wa.override_redirect:
-                # No point doing anything else with override_redirect windows. We don't manage them.
-                raise WindowError('Ignore window, override_redirect is True')
-            # Extract the parts of XWindowAttributes that we need.
-            self.geom = Geometry(wa)
-            self.map_state = wa.map_state.value
-            log.debug('0x%08x: windowattr=%s', self.window, wa)
+    def resize(self, geom):
+        # Actual geom will be set in the configure notify handler.
+        self.wantedgeom = geom
+        if self.wantedgeom != self.geom:
+            log.debug('0x%08x: attempt resize %s -> %s', self.window, self.geom, self.wantedgeom)
+            xlib.xlib.XMoveResizeWindow(self.display, self.window, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
+
+class NormalWindow(ClientWindow):
+    pass
+
+class TransientWindow(ClientWindow):
+
+    def __init__(self, display, window, transientfor):
+        super().__init__(display, window)
+        self.transientfor = transientfor
+        # The family of windows for a transient includes the parent, and potentially, that parents parents etc..
+        try:
+            self.family = [self] + transientfor.family
+        except AttributeError:
+            # transientfor may not be a managed window (?!) in which case it will be None and have no .family attribute.
+            # Xwindows seems to be a land where anything goes!
+            # Set the family like a normal window but we'll still draw like a transient.
+            self.family = [self]
+
+    @property
+    def wantedgeom(self):
+        return self._wantedgeom
+
+    @wantedgeom.setter
+    def wantedgeom(self, geom):
+        # Ignores width/height changes.
+        try:
+            self._wantedgeom.x = geom.x
+        except AttributeError:
+            # If this is the first time we've tried to set, then accept the geometry.
+            self._wantedgeom = geom
         else:
-            raise WindowError('XGetWindowAttributes failed')
-
-    def get_children(self):
-        a = ctypes.byref        # a = address shorthand.
-        root_return = xlib.Window(0)
-        parent_of_root = xlib.Window(0)
-        childrenp = xlib.window_p()
-        nchildren = ctypes.c_uint(0)
-        # XXX assert that root_return == root?
-        status = xlib.xlib.XQueryTree(self.display, self.window, a(root_return), a(parent_of_root), a(childrenp), a(nchildren))
-        children = [childrenp[i] for i in range(nchildren.value)]
-        if nchildren.value > 0:
-            xlib.xlib.XFree(childrenp)
-        return children
-
-    def _load_transientfor(self):
-        # Is the window a transient (eg, a modal dialog box for another window?)
-        # TODO see how multiple windows are done for apps like gimp.
-        # TODO maybe WM_HINTS:WindowGroupHint
-        # XXX Can we have a transient with no parent?
-        tf = xlib.Window()
-        tstatus = xlib.xlib.XGetTransientForHint(self.display, self.window, ctypes.byref(tf))
-        if tstatus > 0:
-            # window is transient, transientfor will contain the window id of the parent window.
-            log.debug('0x%08x: transientfor ret=%s for=%s', self.window, tstatus, tf.value)
-            self.transientfor = tf.value
-        else:
-            self.transientfor = None
-
-    def __str__(self):
-        args = [
-                'id=0x{:08x}'.format(self.window),
-                'name="{}"'.format(self.name),
-                str(self.geom),
-                'mapstate={}'.format(self.map_state),
-                ]
-        if self.res_name:
-            args.append('res_name="{}"'.format(self.res_name))
-        if self.res_class:
-            args.append('res_class="{}"'.format(self.res_class))
-        protocols = self.wm_protocols
-        if protocols:
-            args.append('wm_protocols={}'.format(str(protocols)))
-        if self.transientfor:
-            args.append('transientfor=0x{:08x}'.format(self.transientfor))
-        if self.children:
-            args.append("children=[{}]".format(' '.join('0x{:08x}'.format(x.window) for x in self.children)))
-        return 'Window({})'.format(' '.join(args))
+            # XXX Maybe we should always put in the middle of geom?
+            self._wantedgeom.y = geom.y
 
 def xerrorhandler(display_p, event_p):
     event = event_p.contents
@@ -324,49 +438,21 @@ class Foot(object):
         log.debug('%s: connect displayname=%s', self.__class__.__name__, displayname) #, self.display.contents)
         self.keyboard = kb.Keyboard(self.display)
         self.keymap = {
-                'F5': functools.partial(self.pick_child, 1),
-                'F6': functools.partial(self.pick_child, 2),
-                'F7': functools.partial(self.pick_child, 3),
-                'F8': functools.partial(self.pick_child, 4),
+                'F5': functools.partial(self.show, 1),
+                'F6': functools.partial(self.show, 2),
+                'F7': functools.partial(self.show, 3),
+                'F8': functools.partial(self.show, 4),
                 'F9': functools.partial(self.delete_window, 0),
                 }
         self._init_atoms()
-        self._load_root()
+        # TODO: worry about screens, displays, xrandr and xinerama!
+        self.root = RootWindow(self.display, xlib.xlib.XDefaultRootWindow(self.display))
+        log.debug('0x%08x: _load_root %s', self.root.window, self.root)
         self._install_wm()
         self._make_handlers()
         self.install_keymap()
         self.install_keymap(windows=[self.root])
-        self._show()
-
-    def _load_root(self):
-        # TODO: worry about screens, displays, xrandr and xinerama!
-        self.root = Window(self.display, xlib.xlib.XDefaultRootWindow(self.display))
-        self._import_children()
-        log.debug('0x%08x: _load_root %s', self.root.window, self.root)
-
-    def _import_children(self):
-        for w in self.root.get_children():
-            try:
-                window = Window(self.display, w)
-            except WindowError as e:
-                log.debug('0x%08x: import error %s', w, str(e))
-            else:
-                # WindowError will handle cases where override_redirect=True & XWindowAttributes fails.
-                # We have two extra restrictions when importing windows at program startup.
-                # Allow import of windows that have MapState=IsViewable, or WM_STATE exists.
-                # This is because X has an extra restriction about windows to manage. ie, X apps can create children of the
-                # root window, with their override_redirect=False but never Map them and the window manager then has to ignore them.
-                # With these checks we're assuming that IsViewable means the window will want to Map itself or that a prior window
-                # manager decided to manage the window and added a WM_STATE attribute so we'll manage it too.
-                if window.map_state == xlib.MapState.IsViewable:
-                    append = True
-                elif window.wm_state is not None:
-                    append = True
-                else:
-                    append = False
-                if append:
-                    self.root.children.append(window)
-                    self._manage_window(window)
+        self.show()
 
     def _init_atoms(self):
         def aa(symbol, only_if_exists=False):
@@ -376,7 +462,7 @@ class Foot(object):
         aa(b'WM_DELETE_WINDOW')
         aa(b'WM_TAKE_FOCUS')
         # FIXME need a better organisation for shared atoms...
-        Window.atoms = self._atoms
+        BaseWindow.atoms = self._atoms
 
     def clear_keymap(self):
         for w in self.root.children:
@@ -408,51 +494,26 @@ class Foot(object):
                 xlib.EventName.UnmapNotify:         self.handle_unmapnotify,
                 }
 
-    def _add_window(self, w):
+    def show(self, index=0, keyargs=None):
+        """ Pick a child window to bring to front. Any parents of transient windows will also be shown. """
         try:
-            window = Window(self.display, w)
-        except WindowError as e:
-            log.debug('0x%08x: %s', w, str(e))
-            added = False
-        else:
-            # Add the window to our known list and start managing.
-            self.root.children.insert(0, window)
-            self._manage_window(window)
-            added = True
-        return added
-
-    def _manage_window(self, window):
-        # All normal windows are kept in the withdrawn state unless they're on the top of the MRU list.
-        window.manage(xlib.InputEventMask.StructureNotify)
-        self.install_keymap(windows=[window])
-        # XXX set wm_state here?
-        #log.debug('0x%08x: _add_window added to %s', window.window, parent)
-
-    def pick_child(self, index, keyargs=None):
-        """ Pick a child window to bring to front. """
-        # TODO handle transients, window groups etc.
-        # TODO some of this could be moved into a RootWindow class.
-        try:
-            child = self.root.children.pop(index)
+            family = self.root.pick(index=index)
         except IndexError:
-            log.warning('0x{:08x}: pick_child index={} out of bounds. children len={}'.format(self.root.window, index, len(self.root.children)))
+            log.warning('0x{:08x}: pick index={} out of bounds. children len={}'.format(self.root.window, index, len(self.root.children)))
         else:
-            self.root.children.insert(0, child)
-            self._show()
-
-    def _show(self):
-        """ Show the highest priority window. """
-        # XXX Only select input on mapped (visible) window(s).
-        # TODO assert all windows are withdrawn?
-        visibles, hiddens = find_visible(self.root)
-        for window in visibles:
-            window.resize(self.root.geom)
-            window.show()
-            window.focus()
-            log.debug('0x%08x: showing window=%s', window.window, window)
-        for window in hiddens:
-            log.debug('0x%08x: hiding %s', window.window, window)
-            window.hide()
+            # XXX Only select input on mapped (visible) window(s).
+            for window in reversed(family):
+                window.resize(self.root.geom)
+                window.show()
+                log.debug('0x%08x: showing window=%s', window.window, window)
+            # Focus the very top window.
+            if family:
+                window.focus()
+            # Hide every window that's not in the family of windows.
+            for window in self.root.children:
+                if window not in family:
+                    log.debug('0x%08x: hiding %s', window.window, window)
+                    window.hide()
 
     def delete_window(self, index, keyargs=None):
         """ Delete a window. """
@@ -520,7 +581,7 @@ class Foot(object):
         if e.event == e.window:
             geom = Geometry(e)
             log.debug('0x%08x: ConfigureNotify %s', e.window, geom)
-            window = find_window(self.root, e.window)
+            window = self.root.find_child(e.window)
             if window:
                 window.geom = geom
                 if window.wantedgeom == geom:
@@ -567,13 +628,13 @@ class Foot(object):
             # Remove the destroyed window from window hierarchy.
             # This is also now done in the unmapnotify handler where it checks if the window exists or not.
             # Leaving this code here in case the window is destroyed between the call to unmapnotify and this function.
-            w = find_window(self.root, e.window)
+            w = self.root.find_child(e.window)
             if w is None:
                 log.debug('0x%08x: not found in root %s', e.window, self.root)
             else:
                 self.root.remove_child(w)
                 log.debug('0x%08x: removed from root 0x%08x', w.window, self.root.window)
-            self._show()
+            self.show()
 
     def handle_keypress(self, event):
         """ User has pressed a key that we've grabbed. """
@@ -591,7 +652,7 @@ class Foot(object):
             except KeyError:
                 log.error('0x%08x: no function for keysym=%s', e.window, keysym)
             else:
-                keyargs = (self, find_window(self.root, e.window), keysym, e.keycode, e.state.value)
+                keyargs = (self, self.root.find_child(e.window), keysym, e.keycode, e.state.value)
                 keyfunc(keyargs=keyargs)
 
     def handle_mappingnotify(self, event):
@@ -608,7 +669,7 @@ class Foot(object):
         if e.event == e.window:
             log.debug('0x%08x: MapNotify event=0x%08x override_redirect=%s', e.window, e.event, e.override_redirect)
             # Add a WM_STATE property to the window. See ICCCM 4.1.3.1
-            window = find_window(self.root, e.window)
+            window = self.root.find_child(e.window)
             if window:
                 window.wm_state = xlib.WmStateState.Normal
             else:
@@ -617,15 +678,16 @@ class Foot(object):
     def handle_maprequest(self, event):
         # A window has requested that it be shown.
         w = event.xmaprequest.window
-        window = find_window(self.root, w)
+        window = self.root.find_child(w)
         log.debug('0x%08x: MapRequest known=%s', w, window is not None)
         if window is None:
             p = event.xmaprequest.parent
-            if self._add_window(w):
-                self._show()
-        else:
+            window = self.root.add_child(w)
+            if window:
+                self.install_keymap(windows=[window])
+        if window:
             # Put window to the top of the list.
-            self.pick_child(index=self.root.children.index(window))
+            self.show(index=self.root.children.index(window))
 
     def handle_unmapnotify(self, event):
         e = event.xunmap
@@ -638,7 +700,7 @@ class Foot(object):
             # Only handle if the notify event not caused by a sub-structure redirect. See man XUnmapEvent
             if e.event == e.window:
                 # X has unmapped the window, we can now put it in the withdrawn state.
-                window = find_window(self.root, e.window)
+                window = self.root.find_child(e.window)
                 if window:
                     # Check that the window still exists!
                     # We have to do this check or else writing to a destroyed window will cause our event loop to halt.
@@ -651,7 +713,7 @@ class Foot(object):
                         self.root.remove_child(window)
                     log.debug('0x%08x: Unmap successful %s', e.window, window)
                     # Since the window has been unmapped(hidden) show the next window in the list.
-                self._show()
+                self.show()
 
     def __del__(self):
         xlib.xlib.XCloseDisplay(self.display)
