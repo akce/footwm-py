@@ -464,7 +464,7 @@ class Foot(object):
 
     def clear_keymap(self):
         for w in self.root.children:
-            xlib.xlib.XUngrabKey(self.display.xh, xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, w)
+            self.display.ungrabkey(xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, w)
 
     def install_keymap(self, windows=None):
         """ Installs the window manager top level keymap to selected windows. Install to all managed windows if windows is None. """
@@ -477,7 +477,7 @@ class Foot(object):
             keycode, modifier = self.keyboard.keycodes[keysymname]
             # XXX Should we install the keymap only when the window is focused?
             for w in ws:
-                xlib.xlib.XGrabKey(self.display.xh, keycode, modifier, w.window, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
+                self.display.grabkey(keycode, modifier, w, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
 
     def _make_handlers(self):
         self.eventhandlers = {
