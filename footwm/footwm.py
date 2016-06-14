@@ -209,7 +209,7 @@ class ClientWindow(BaseWindow):
             self.clientmessage(msg)
         except KeyError:
             #log.debug('0x%08x: %s not supported', self.window, msg)
-            xlib.xlib.XSetInputFocus(self.display.xh, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
+            self.display.setinputfocus(self, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
 
     def _sendclientmessage(self, atom, time):
         """ Send a ClientMessage event to window. """

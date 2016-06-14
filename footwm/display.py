@@ -255,6 +255,9 @@ class Display:
         status = xlib.xlib.XSendEvent(self.xh, window.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
         return status != 0
 
+    def setinputfocus(self, window, revertto, time):
+        xlib.xlib.XSetInputFocus(self.xh, window.window, revertto, time)
+
     def setwmstate(self, window, winstate):
         state = xlib.WmState()
         state.state = xlib.WmStateState(winstate)
