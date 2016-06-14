@@ -575,4 +575,5 @@ def main():
         foot = Foot()
     except Exception as e:
         log.exception(e)
-    foot.run()
+    else:
+        foot.run()
