@@ -152,6 +152,16 @@ class Display:
                 protocols[aname] = aid
         return protocols
 
+    def getwindowattributes(self, window):
+        wa = xlib.XWindowAttributes()
+        astatus = xlib.xlib.XGetWindowAttributes(self.xh, window.window, ctypes.byref(wa))
+        if astatus > 0:
+            # XGetWindowAttr completed successfully.
+            ret = wa
+        else:
+            ret = None
+        return ret
+
     def getwmname(self, window):
         name = None
         xtp = xlib.XTextProperty()

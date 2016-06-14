@@ -58,10 +58,8 @@ class BaseWindow(object):
         return self.display.getwmname(self)
 
     def _load_window_attr(self):
-        wa = xlib.XWindowAttributes()
-        astatus = xlib.xlib.XGetWindowAttributes(self.display.xh, self.window, ctypes.byref(wa))
-        if astatus > 0:
-            # XGetWindowAttr completed successfully.
+        wa = self.display.getwindowattributes(self)
+        if wa:
             if wa.override_redirect:
                 # No point doing anything else with override_redirect windows. We don't manage them.
                 raise WindowError('Ignore window, override_redirect is True')
