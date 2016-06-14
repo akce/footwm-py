@@ -478,8 +478,6 @@ class Foot(object):
         if e.event == e.window:
             log.debug('0x%08x: DestroyNotify event=0x%08x', e.window, e.event)
             # Remove the destroyed window from window hierarchy.
-            # This is also now done in the unmapnotify handler where it checks if the window exists or not.
-            # Leaving this code here in case the window is destroyed between the call to unmapnotify and this function.
             w = self.root.find_child(e.window)
             if w is None:
                 log.debug('0x%08x: not found in root %s', e.window, self.root)
@@ -554,15 +552,8 @@ class Foot(object):
                 # X has unmapped the window, we can now put it in the withdrawn state.
                 window = self.root.find_child(e.window)
                 if window:
-                    # Check that the window still exists!
-                    # We have to do this check or else writing to a destroyed window will cause our event loop to halt.
-                    # XXX Should we XGrabServer here?
-                    wids = self.display.querytree(self.root)
-                    if window.window in wids:
-                        # Mark window Withdrawn. See ICCCM 4.1.3.1
-                        window.wm_state = xlib.WmStateState.Withdrawn
-                    else:
-                        self.root.remove_child(window)
+                    # Mark window Withdrawn. See ICCCM 4.1.3.1
+                    window.wm_state = xlib.WmStateState.Withdrawn
                     log.debug('0x%08x: Unmap successful %s', e.window, window)
                     # Since the window has been unmapped(hidden) show the next window in the list.
                 self.show()
