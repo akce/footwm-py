@@ -258,39 +258,14 @@ class ClientWindow(BaseWindow):
 
     @property
     def wm_state(self):
-        state = None
-        a = ctypes.byref        # a = address shorthand.
-        WM_STATE = self.display.atom['WM_STATE']
-        actual_type_return = xlib.Atom()
-        actual_format_return = ctypes.c_int()
-        nitems_return = ctypes.c_ulong(0)
-        bytes_after_return = ctypes.c_ulong()
-        prop_return = xlib.byte_p()
-        # sizeof return WmState struct in length of longs, not bytes. See XGetWindowProperty
-        long_length = int(ctypes.sizeof(xlib.WmState) / ctypes.sizeof(ctypes.c_long))
-
-        ret = xlib.xlib.XGetWindowProperty(self.display.xh, self.window, WM_STATE, 0, long_length, False, WM_STATE, a(actual_type_return), a(actual_format_return), a(nitems_return), a(bytes_after_return), a(prop_return))
-        if ret == 0:
-            # Success! We need also check if anything was returned..
-            if nitems_return.value > 0:
-                # This wm doesn't support window icons, so only return WmState.state.
-                sp = ctypes.cast(prop_return, xlib.wmstate_p).contents
-                state = sp.state
-            xlib.xlib.XFree(prop_return)
+        state = self.display.getwmstate(self)
         log.debug('0x%08x: Get WM_STATE state=%s', self.window, state)
         return state
 
     @wm_state.setter
     def wm_state(self, winstate):
-        state = xlib.WmState()
-        state.state = xlib.WmStateState(winstate)
-        log.debug('0x%08x: Set WM_STATE state=%s', self.window, state.state)
-        state.icon = 0
-        WM_STATE = self.display.atom['WM_STATE']
-        data_p = ctypes.cast(ctypes.byref(state), xlib.byte_p)
-        long_length = int(ctypes.sizeof(state) / ctypes.sizeof(ctypes.c_long))
-        # Specify as 32 (longs), that way the Xlib client will handle endian translations.
-        xlib.xlib.XChangeProperty(self.display.xh, self.window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
+        log.debug('0x%08x: Set WM_STATE state=%s', self.window, xlib.WmStateState(winstate))
+        self.display.setwmstate(self, winstate)
 
     def resize(self, geom):
         # Actual geom will be set in the configure notify handler.

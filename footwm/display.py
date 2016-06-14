@@ -176,6 +176,27 @@ class Display:
                 self.free(xtp.value)
         return name
 
+    def getwmstate(self, window):
+        state = None
+        WM_STATE = self.atom['WM_STATE']
+        actual_type_return = xlib.Atom()
+        actual_format_return = ctypes.c_int()
+        nitems_return = ctypes.c_ulong(0)
+        bytes_after_return = ctypes.c_ulong()
+        prop_return = xlib.byte_p()
+        # sizeof return WmState struct in length of longs, not bytes. See XGetWindowProperty
+        long_length = int(ctypes.sizeof(xlib.WmState) / ctypes.sizeof(ctypes.c_long))
+
+        ret = xlib.xlib.XGetWindowProperty(self.xh, window.window, WM_STATE, 0, long_length, False, WM_STATE, addr(actual_type_return), addr(actual_format_return), addr(nitems_return), addr(bytes_after_return), addr(prop_return))
+        if ret == 0:
+            # Success! We need also check if anything was returned..
+            if nitems_return.value > 0:
+                # This wm doesn't support window icons, so only return WmState.state.
+                sp = ctypes.cast(prop_return, xlib.wmstate_p).contents
+                state = sp.state
+            xlib.xlib.XFree(prop_return)
+        return state
+
     @property
     def keymodifiercodes(self):
         xmodmap = xlib.xlib.XGetModifierMapping(self.xh)
@@ -230,6 +251,16 @@ class Display:
         """ Do the fancy ctypes event casting before calling XSendEvent. """
         status = xlib.xlib.XSendEvent(self.xh, window.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
         return status != 0
+
+    def setwmstate(self, window, winstate):
+        state = xlib.WmState()
+        state.state = xlib.WmStateState(winstate)
+        state.icon = 0
+        WM_STATE = self.atom['WM_STATE']
+        data_p = ctypes.cast(addr(state), xlib.byte_p)
+        long_length = int(ctypes.sizeof(state) / ctypes.sizeof(ctypes.c_long))
+        # Specify as 32 (longs), that way the Xlib client will handle endian translations.
+        xlib.xlib.XChangeProperty(self.xh, window.window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
 
     def sync(self, discard=False):
         xlib.xlib.XSync(self.xh, discard)
