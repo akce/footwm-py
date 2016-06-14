@@ -55,11 +55,11 @@ class Keyboard:
         kmin = ctypes.c_int()
         kmax = ctypes.c_int()
 
-        xlib.xlib.XDisplayKeycodes(self.display, ctypes.byref(kmin), ctypes.byref(kmax))
+        xlib.xlib.XDisplayKeycodes(self.display.xh, ctypes.byref(kmin), ctypes.byref(kmax))
         kcount = kmax.value - kmin.value
         #print('keycode min={} max={} count={}'.format(kmin.value, kmax.value, kcount))
         keysyms_per_keycode = ctypes.c_int()
-        kbmapping = xlib.xlib.XGetKeyboardMapping(self.display, kmin.value, kcount, ctypes.byref(keysyms_per_keycode))
+        kbmapping = xlib.xlib.XGetKeyboardMapping(self.display.xh, kmin.value, kcount, ctypes.byref(keysyms_per_keycode))
         #print('keysyms/keycode={}'.format(keysyms_per_keycode.value))
         kbarray = Array(kbmapping, keysyms_per_keycode.value)
         # Convert to non-ctypes.
@@ -69,7 +69,7 @@ class Keyboard:
 
     def _load_keymodifiercodes(self):
         """ List of key modifier masks and their keycodes. """
-        xmodmap = xlib.xlib.XGetModifierMapping(self.display)
+        xmodmap = xlib.xlib.XGetModifierMapping(self.display.xh)
         keypermod = xmodmap.contents.max_keypermod
         modnames = [n for n, _ in xlib.KeyModifierMask._bits_]
         #print('xmodmap.max_keypermod={} modnames={}'.format(keypermod, modnames))

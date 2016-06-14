@@ -12,6 +12,7 @@ import sys
 
 # Local modules.
 import footwm.xlib as xlib
+from . import display
 import footwm.kb as kb
 import footwm.log
 
@@ -45,7 +46,7 @@ def get_transientfor(display, windowid):
     # TODO see how multiple windows are done for apps like gimp.
     # TODO maybe WM_HINTS:WindowGroupHint
     tf = xlib.Window()
-    tstatus = xlib.xlib.XGetTransientForHint(display, windowid, ctypes.byref(tf))
+    tstatus = xlib.xlib.XGetTransientForHint(display.xh, windowid, ctypes.byref(tf))
     if tstatus > 0:
         # window is transient, transientfor will contain the window id of the parent window.
         log.debug('0x%08x: transientfor ret=%s for=%s', windowid, tstatus, tf.value)
@@ -64,11 +65,11 @@ class BaseWindow(object):
 
     def manage(self, eventmask):
         # watch, maintain, manage, control etc.
-        xlib.xlib.XSelectInput(self.display, self.window, eventmask)
+        xlib.xlib.XSelectInput(self.display.xh, self.window, eventmask)
 
     def _sendevent(self, event, eventtype=xlib.InputEventMask.NoEvent):
         """ Do the fancy ctypes event casting before calling XSendEvent. """
-        status = xlib.xlib.XSendEvent(self.display, self.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
+        status = xlib.xlib.XSendEvent(self.display.xh, self.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
         return status != 0
 
     def _xtext_to_lines(self, xtextprop):
@@ -79,7 +80,7 @@ class BaseWindow(object):
             # ICCCM 2.7.1 - XA_STRING == latin-1 encoding.
             enc = 'latin1'
         else:
-            atomname = xlib.xlib.XGetAtomName(self.display, xtextprop.encoding)
+            atomname = xlib.xlib.XGetAtomName(self.display.xh, xtextprop.encoding)
             log.error('************ UNSUPPORTED TEXT ENCODING ATOM=%s %s', xtextprop.encoding, atomname)
             xlib.xlib.XFree(atomname)
         if enc:
@@ -96,7 +97,7 @@ class BaseWindow(object):
     def wm_name(self):
         name = None
         xtp = xlib.XTextProperty()
-        status = xlib.xlib.XGetWMName(self.display, self.window, ctypes.byref(xtp))
+        status = xlib.xlib.XGetWMName(self.display.xh, self.window, ctypes.byref(xtp))
         if status > 0:
             #log.debug('xtp %s', xtp)
             if xtp.nitems > 0:
@@ -110,7 +111,7 @@ class BaseWindow(object):
 
     def _load_window_attr(self):
         wa = xlib.XWindowAttributes()
-        astatus = xlib.xlib.XGetWindowAttributes(self.display, self.window, ctypes.byref(wa))
+        astatus = xlib.xlib.XGetWindowAttributes(self.display.xh, self.window, ctypes.byref(wa))
         if astatus > 0:
             # XGetWindowAttr completed successfully.
             if wa.override_redirect:
@@ -166,30 +167,6 @@ class RootWindow(BaseWindow):
     def __init__(self, display, window):
         super().__init__(display, window)
         self._import_children()
-
-    def manage(self, eventmask):
-        """ Install ourselves as *the* window manager. """
-        # Assume we can install, wmerrhandler will tell us if we can't be the window manager.
-        installed = True
-        def wmerrhandler(display_p, event_p):
-            nonlocal installed
-            # XSelectInput(rootwin) will set BadAccess if there's another wm running.
-            if event_p.contents.error_code == xlib.Error.BadAccess:
-                installed = False
-            # Need to return an int here - it's ignored. No explicit return will cause an error.
-            return 0
-        olderrorhandler = xlib.XSetErrorHandler(wmerrhandler)
-        super().manage(eventmask)
-        xlib.xlib.XSync(self.display, False)
-        if installed:
-            # We are now the window manager - continue install.
-            # XXX Should we remove WM_ICON_SIZE from root? In case an old WM installed it. See ICCCM 4.1.9
-            # Install X error handler.
-            xlib.XSetErrorHandler(xerrorhandler)
-        else:
-            # Exit.
-            log.error('Another WM is already running!')
-            sys.exit(1)
 
     def add_child(self, w):
         window = self._make_window(w)
@@ -252,7 +229,7 @@ class RootWindow(BaseWindow):
         childrenp = xlib.window_p()
         nchildren = ctypes.c_uint(0)
         # XXX assert that root_return == root?
-        status = xlib.xlib.XQueryTree(self.display, self.window, a(root_return), a(parent_of_root), a(childrenp), a(nchildren))
+        status = xlib.xlib.XQueryTree(self.display.xh, self.window, a(root_return), a(parent_of_root), a(childrenp), a(nchildren))
         children = [childrenp[i] for i in range(nchildren.value)]
         if nchildren.value > 0:
             xlib.xlib.XFree(childrenp)
@@ -287,10 +264,10 @@ class ClientWindow(BaseWindow):
         self.family = [self]
 
     def hide(self):
-        xlib.xlib.XUnmapWindow(self.display, self.window)
+        xlib.xlib.XUnmapWindow(self.display.xh, self.window)
 
     def show(self):
-        xlib.xlib.XMapWindow(self.display, self.window)
+        xlib.xlib.XMapWindow(self.display.xh, self.window)
 
     def focus(self):
         msg = 'WM_TAKE_FOCUS'
@@ -298,7 +275,7 @@ class ClientWindow(BaseWindow):
             self.clientmessage(msg)
         except KeyError:
             #log.debug('0x%08x: %s not supported', self.window, msg)
-            xlib.xlib.XSetInputFocus(self.display, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
+            xlib.xlib.XSetInputFocus(self.display.xh, self.window, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
 
     def _sendclientmessage(self, atom, time):
         """ Send a ClientMessage event to window. """
@@ -339,7 +316,7 @@ class ClientWindow(BaseWindow):
     def wm_class(self):
         """ WM_CLASS is a tuple of resource name & class. See ICCCM 4.1.2.5 """
         xch = xlib.XClassHint()
-        status = xlib.xlib.XGetClassHint(self.display, self.window, ctypes.byref(xch))
+        status = xlib.xlib.XGetClassHint(self.display.xh, self.window, ctypes.byref(xch))
         if status > 0:
             # See xlib.py: XClassHint for why we can't use ctypes.c_char_p here.
             ret = str(ctypes.cast(xch.res_name, ctypes.c_char_p).value, 'utf8'), str(ctypes.cast(xch.res_class, ctypes.c_char_p).value, 'utf8')
@@ -356,7 +333,7 @@ class ClientWindow(BaseWindow):
         """ Return dict(name -> atom) of ATOMs comprising supported WM_PROTOCOLS for the client window. """
         catoms = xlib.atom_p()
         ncount = ctypes.c_int()
-        status = xlib.xlib.XGetWMProtocols(self.display, self.window, ctypes.byref(catoms), ctypes.byref(ncount))
+        status = xlib.xlib.XGetWMProtocols(self.display.xh, self.window, ctypes.byref(catoms), ctypes.byref(ncount))
         protocols = {}
         if status != 0:
             aids = [catoms[i] for i in range(ncount.value)]
@@ -366,7 +343,7 @@ class ClientWindow(BaseWindow):
                 try:
                     aname = atomnames[aid]
                 except KeyError:
-                    caname = xlib.xlib.XGetAtomName(self.display, aid)
+                    caname = xlib.xlib.XGetAtomName(self.display.xh, aid)
                     aname = str(ctypes.cast(caname, ctypes.c_char_p).value, 'latin1')
                     xlib.xlib.XFree(caname)
                     log.debug('0x%08x: Unsupported WM_PROTOCOL atom %s=%d', self.window, aname, aid)
@@ -386,7 +363,7 @@ class ClientWindow(BaseWindow):
         # sizeof return WmState struct in length of longs, not bytes. See XGetWindowProperty
         long_length = int(ctypes.sizeof(xlib.WmState) / ctypes.sizeof(ctypes.c_long))
 
-        ret = xlib.xlib.XGetWindowProperty(self.display, self.window, WM_STATE, 0, long_length, False, WM_STATE, a(actual_type_return), a(actual_format_return), a(nitems_return), a(bytes_after_return), a(prop_return))
+        ret = xlib.xlib.XGetWindowProperty(self.display.xh, self.window, WM_STATE, 0, long_length, False, WM_STATE, a(actual_type_return), a(actual_format_return), a(nitems_return), a(bytes_after_return), a(prop_return))
         if ret == 0:
             # Success! We need also check if anything was returned..
             if nitems_return.value > 0:
@@ -407,14 +384,14 @@ class ClientWindow(BaseWindow):
         data_p = ctypes.cast(ctypes.byref(state), xlib.byte_p)
         long_length = int(ctypes.sizeof(state) / ctypes.sizeof(ctypes.c_long))
         # Specify as 32 (longs), that way the Xlib client will handle endian translations.
-        xlib.xlib.XChangeProperty(self.display, self.window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
+        xlib.xlib.XChangeProperty(self.display.xh, self.window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
 
     def resize(self, geom):
         # Actual geom will be set in the configure notify handler.
         self.wantedgeom = geom
         if self.wantedgeom != self.geom:
             log.debug('0x%08x: attempt resize %s -> %s', self.window, self.geom, self.wantedgeom)
-            xlib.xlib.XMoveResizeWindow(self.display, self.window, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
+            xlib.xlib.XMoveResizeWindow(self.display.xh, self.window, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
 
 class NormalWindow(ClientWindow):
     pass
@@ -449,17 +426,12 @@ class TransientWindow(ClientWindow):
             # XXX Maybe we should always put in the middle of geom?
             self._wantedgeom.y = geom.y
 
-def xerrorhandler(display_p, event_p):
-    event = event_p.contents
-    log.error('X Error: %s', event)
-    return 0
-
 class Foot(object):
 
     def __init__(self, displayname=None):
         self._atoms = {}
-        self.display = xlib.xlib.XOpenDisplay(displayname)
-        log.debug('%s: connect displayname=%s', self.__class__.__name__, displayname) #, self.display.contents)
+        self.display = display.Display(displayname)
+        log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
         self.keyboard = kb.Keyboard(self.display)
         self.keymap = {
                 'F5': functools.partial(self.show, 1),
@@ -470,9 +442,16 @@ class Foot(object):
                 }
         self._init_atoms()
         # TODO: worry about screens, displays, xrandr and xinerama!
-        self.root = RootWindow(self.display, xlib.xlib.XDefaultRootWindow(self.display))
+        self.root = RootWindow(self.display, xlib.xlib.XDefaultRootWindow(self.display.xh))
         log.debug('0x%08x: _load_root %s', self.root.window, self.root)
-        self.root.manage(xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify)
+        eventmask = xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify
+        self.display.install(self.root, eventmask)
+        # We are now the window manager - continue install.
+        # XXX Should we remove WM_ICON_SIZE from root? In case an old WM installed it. See ICCCM 4.1.9
+        def xerrorhandler(display, xerrorevent):
+            log.error('X Error: %s', xerrorevent)
+            return 0
+        self.display.errorhandler = xerrorhandler
         self._make_handlers()
         self.install_keymap()
         self.install_keymap(windows=[self.root])
@@ -480,7 +459,7 @@ class Foot(object):
 
     def _init_atoms(self):
         def aa(symbol, only_if_exists=False):
-            self._atoms[symbol] = xlib.xlib.XInternAtom(self.display, bytes(symbol, 'utf8'), only_if_exists)
+            self._atoms[symbol] = xlib.xlib.XInternAtom(self.display.xh, bytes(symbol, 'utf8'), only_if_exists)
         aa('WM_STATE')
         aa('WM_PROTOCOLS')
         aa('WM_DELETE_WINDOW')
@@ -490,7 +469,7 @@ class Foot(object):
 
     def clear_keymap(self):
         for w in self.root.children:
-            xlib.xlib.XUngrabKey(self.display, xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, w)
+            xlib.xlib.XUngrabKey(self.display.xh, xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, w)
 
     def install_keymap(self, windows=None):
         """ Installs the window manager top level keymap to selected windows. Install to all managed windows if windows is None. """
@@ -503,7 +482,7 @@ class Foot(object):
             keycode, modifier = self.keyboard.keycodes[keysymname]
             # XXX Should we install the keymap only when the window is focused?
             for w in ws:
-                xlib.xlib.XGrabKey(self.display, keycode, modifier, w.window, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
+                xlib.xlib.XGrabKey(self.display.xh, keycode, modifier, w.window, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
 
     def _make_handlers(self):
         self.eventhandlers = {
@@ -553,7 +532,7 @@ class Foot(object):
         event = xlib.XEvent()
         while True:
             try:
-                xlib.xlib.XNextEvent(self.display, ctypes.byref(event))
+                xlib.xlib.XNextEvent(self.display.xh, ctypes.byref(event))
                 e = xlib.EventName(event.type)
                 #log.debug('event: %s', e)
                 try:
@@ -590,7 +569,7 @@ class Foot(object):
                     # Window is not the size we want, make a configure request.
                     wg = window.wantedgeom
                     log.debug('0x%08x: requesting again, wanted %s current %s', e.window, window.wantedgeom, window.geom)
-                    xlib.xlib.XMoveResizeWindow(self.display, e.window, wg.x, wg.y, wg.w, wg.h)
+                    xlib.xlib.XMoveResizeWindow(self.display.xh, e.window, wg.x, wg.y, wg.w, wg.h)
 
     def handle_configurerequest(self, event):
         # Some other client tried to reconfigure e.window
@@ -617,7 +596,7 @@ class Foot(object):
         # Grant requested geom.
         requestedgeom = Geometry(wc)
         log.debug('0x%08x: requested %s %s', e.window, xlib.ConfigureWindowStructure(changemask), requestedgeom)
-        xlib.xlib.XConfigureWindow(self.display, e.window, changemask, ctypes.byref(wc))
+        xlib.xlib.XConfigureWindow(self.display.xh, e.window, changemask, ctypes.byref(wc))
 
     def handle_destroynotify(self, event):
         # Window has been destroyed.
@@ -695,7 +674,7 @@ class Foot(object):
             # The UnmapNotify is because client called something like XWithdrawWindow or XIconifyWindow.
             # Unmap the window, but remove when the xserver sends another UnmapNotify message with send_event=False.
             log.debug('0x%08x: Client requests unmap.. calling XUnmapWindow', e.window)
-            xlib.xlib.XUnmapWindow(self.display, e.window)
+            xlib.xlib.XUnmapWindow(self.display.xh, e.window)
         else:
             # Only handle if the notify event not caused by a sub-structure redirect. See man XUnmapEvent
             if e.event == e.window:
@@ -716,7 +695,7 @@ class Foot(object):
                 self.show()
 
     def __del__(self):
-        xlib.xlib.XCloseDisplay(self.display)
+        xlib.xlib.XCloseDisplay(self.display.xh)
         self.display = None
 
 def main():
