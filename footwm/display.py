@@ -152,6 +152,20 @@ class Display:
                 protocols[aname] = aid
         return protocols
 
+    def getwmname(self, window):
+        name = None
+        xtp = xlib.XTextProperty()
+        status = xlib.xlib.XGetWMName(self.xh, window.window, addr(xtp))
+        if status > 0:
+            #log.debug('xtp %s', xtp)
+            if xtp.nitems > 0:
+                try:
+                    name = self.textprop_to_lines(xtp)[0]
+                except IndexError:
+                    pass
+                self.free(xtp.value)
+        return name
+
     @property
     def keymodifiercodes(self):
         xmodmap = xlib.xlib.XGetModifierMapping(self.xh)
@@ -197,6 +211,27 @@ class Display:
 
     def sync(self, discard=False):
         xlib.xlib.XSync(self.xh, discard)
+
+    def textprop_to_lines(self, xtextprop):
+        lines = []
+        #enc = 'utf8'
+        enc = None
+        if xtextprop.encoding == xlib.XA.STRING:
+            # ICCCM 2.7.1 - XA_STRING == latin-1 encoding.
+            enc = 'latin1'
+#        else:
+#            atomname = self.getatomname(xtextprop.encoding)
+#            #log.error('************ UNSUPPORTED TEXT ENCODING ATOM=%s %s', xtextprop.encoding, atomname)
+#            self.free(atomname)
+        if enc:
+            nitems = ctypes.c_int()
+            list_return = ctypes.POINTER(ctypes.c_char_p)()
+            status = xlib.xlib.XTextPropertyToStringList(addr(xtextprop), addr(list_return), addr(nitems))
+            if status > 0:
+                lines = [str(list_return[i], enc) for i in range(nitems.value)]
+                #log.debug('xtext lines %s', lines)
+                xlib.xlib.XFreeStringList(list_return)
+        return lines
 
     def ungrabkey(self, keycode, modifiermask, grabwindow):
         xlib.xlib.XUngrabKey(self.xh, keycode, modifiermask, grabwindow.window)

@@ -52,42 +52,10 @@ class BaseWindow(object):
         # watch, maintain, manage, control etc.
         self.display.selectinput(self, eventmask)
 
-    def _xtext_to_lines(self, xtextprop):
-        lines = []
-        #enc = 'utf8'
-        enc = None
-        if xtextprop.encoding == xlib.XA.STRING:
-            # ICCCM 2.7.1 - XA_STRING == latin-1 encoding.
-            enc = 'latin1'
-        else:
-            atomname = xlib.xlib.XGetAtomName(self.display.xh, xtextprop.encoding)
-            log.error('************ UNSUPPORTED TEXT ENCODING ATOM=%s %s', xtextprop.encoding, atomname)
-            xlib.xlib.XFree(atomname)
-        if enc:
-            nitems = ctypes.c_int()
-            list_return = ctypes.POINTER(ctypes.c_char_p)()
-            status = xlib.xlib.XTextPropertyToStringList(ctypes.byref(xtextprop), ctypes.byref(list_return), ctypes.byref(nitems))
-            if status > 0:
-                lines = [str(list_return[i], enc) for i in range(nitems.value)]
-                #log.debug('xtext lines %s', lines)
-                xlib.xlib.XFreeStringList(list_return)
-        return lines
-
     @property
     def wm_name(self):
-        name = None
-        xtp = xlib.XTextProperty()
-        status = xlib.xlib.XGetWMName(self.display.xh, self.window, ctypes.byref(xtp))
-        if status > 0:
-            #log.debug('xtp %s', xtp)
-            if xtp.nitems > 0:
-                try:
-                    name = self._xtext_to_lines(xtp)[0]
-                except IndexError:
-                    pass
-                xlib.xlib.XFree(xtp.value)
-        log.debug('0x%08x: Get WM_NAME name=%s status=%d', self.window, name, status)
-        return name
+        #log.debug('0x%08x: Get WM_NAME name=%s status=%d', self.window, name)
+        return self.display.getwmname(self)
 
     def _load_window_attr(self):
         wa = xlib.XWindowAttributes()
