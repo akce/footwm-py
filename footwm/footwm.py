@@ -524,16 +524,15 @@ class Foot(object):
             # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
 
     def run(self):
-        event = xlib.XEvent()
         while True:
             try:
-                xlib.xlib.XNextEvent(self.display.xh, ctypes.byref(event))
+                event = self.display.nextevent
                 e = xlib.EventName(event.type)
                 #log.debug('event: %s', e)
                 try:
                     handler = self.eventhandlers[e.value]
                 except KeyError:
-                    log.error('unhandled event %s', xlib.EventName(event.type))
+                    log.error('unhandled event %s', e)
                 else:
                     handler(event)
             except Exception as e:

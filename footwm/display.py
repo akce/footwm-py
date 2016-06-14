@@ -57,6 +57,7 @@ class Display:
         if self.xh is None:
             raise DisplayError('Failed to connect to display {}'.format(displayname))
         self.atom = {}
+        self._nextevent = xlib.XEvent()
 
     def add_atom(self, symbol, only_if_exists=False):
         self.atom[symbol] = xlib.xlib.XInternAtom(self.xh, bytes(symbol, 'utf8'), only_if_exists)
@@ -130,6 +131,11 @@ class Display:
         self.sync()
         if not self.installed:
             raise DisplayError('Another WM is running')
+
+    @property
+    def nextevent(self):
+        xlib.xlib.XNextEvent(self.xh, addr(self._nextevent))
+        return self._nextevent
 
     def sync(self, discard=False):
         xlib.xlib.XSync(self.xh, discard)
