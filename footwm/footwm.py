@@ -5,10 +5,8 @@ Copyright (c) 2016 Akce
 """
 
 # Python standard modules.
-import ctypes   # TODO xlib needs to abstract enough so clients don't need ctypes!
 import functools
 import logging
-import sys
 
 # Local modules.
 import footwm.xlib as xlib
