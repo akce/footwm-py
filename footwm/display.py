@@ -227,6 +227,9 @@ class Display:
         if not self.installed:
             raise DisplayError('Another WM is running')
 
+    def mapwindow(self, window):
+        xlib.xlib.XMapWindow(self.xh, window.window)
+
     @property
     def nextevent(self):
         xlib.xlib.XNextEvent(self.xh, addr(self._nextevent))

@@ -201,7 +201,7 @@ class ClientWindow(BaseWindow):
         self.display.unmapwindow(self.window)
 
     def show(self):
-        xlib.xlib.XMapWindow(self.display.xh, self.window)
+        self.display.mapwindow(self)
 
     def focus(self):
         msg = 'WM_TAKE_FOCUS'
