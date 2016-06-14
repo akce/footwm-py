@@ -301,24 +301,7 @@ class ClientWindow(BaseWindow):
     @property
     def wm_protocols(self):
         """ Return dict(name -> atom) of ATOMs comprising supported WM_PROTOCOLS for the client window. """
-        catoms = xlib.atom_p()
-        ncount = ctypes.c_int()
-        status = xlib.xlib.XGetWMProtocols(self.display.xh, self.window, ctypes.byref(catoms), ctypes.byref(ncount))
-        protocols = {}
-        if status != 0:
-            aids = [catoms[i] for i in range(ncount.value)]
-            xlib.xlib.XFree(catoms)
-            atomnames = {v: k for k, v in self.display.atom.items()}
-            for aid in aids:
-                try:
-                    aname = atomnames[aid]
-                except KeyError:
-                    caname = xlib.xlib.XGetAtomName(self.display.xh, aid)
-                    aname = str(ctypes.cast(caname, ctypes.c_char_p).value, 'latin1')
-                    xlib.xlib.XFree(caname)
-                    log.debug('0x%08x: Unsupported WM_PROTOCOL atom %s=%d', self.window, aname, aid)
-                protocols[aname] = aid
-        return protocols
+        return self.display.getprotocols(self)
 
     @property
     def wm_state(self):

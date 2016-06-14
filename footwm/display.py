@@ -91,6 +91,12 @@ class Display:
     def free(self, xobject):
         xlib.xlib.XFree(xobject)
 
+    def getatomname(self, atom, encoding='latin1'):
+        caname = xlib.xlib.XGetAtomName(self.xh, atom)
+        aname = str(ctypes.cast(caname, ctypes.c_char_p).value, encoding)
+        self.free(caname)
+        return aname
+
     def getkeyboardmapping(self, keymin, keycount):
         keysyms_per_keycode = ctypes.c_int()
         kbmapping = xlib.xlib.XGetKeyboardMapping(self.xh, keymin, keycount, ctypes.byref(keysyms_per_keycode))
@@ -127,6 +133,24 @@ class Display:
         else:
             ret = "", ""
         return ret
+
+    def getprotocols(self, window):
+        catoms = xlib.atom_p()
+        ncount = ctypes.c_int()
+        status = xlib.xlib.XGetWMProtocols(self.xh, window.window, addr(catoms), addr(ncount))
+        protocols = {}
+        if status != 0:
+            aids = [catoms[i] for i in range(ncount.value)]
+            self.free(catoms)
+            atomnames = {v: k for k, v in self.atom.items()}
+            for aid in aids:
+                try:
+                    aname = atomnames[aid]
+                except KeyError:
+                    aname = self.getatomname(aid)
+                    #log.debug('0x%08x: Unsupported WM_PROTOCOL atom %s=%d', window.window, aname, aid)
+                protocols[aname] = aid
+        return protocols
 
     @property
     def keymodifiercodes(self):
