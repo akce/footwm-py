@@ -52,11 +52,6 @@ class BaseWindow(object):
         # watch, maintain, manage, control etc.
         xlib.xlib.XSelectInput(self.display.xh, self.window, eventmask)
 
-    def _sendevent(self, event, eventtype=xlib.InputEventMask.NoEvent):
-        """ Do the fancy ctypes event casting before calling XSendEvent. """
-        status = xlib.xlib.XSendEvent(self.display.xh, self.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
-        return status != 0
-
     def _xtext_to_lines(self, xtextprop):
         lines = []
         #enc = 'utf8'
@@ -272,7 +267,7 @@ class ClientWindow(BaseWindow):
         ev.format = 32
         ev.data.l[0] = atom
         ev.data.l[1] = time
-        return self._sendevent(ev)
+        return self.display.sendevent(self, ev)
 
     def clientmessage(self, msg, time=xlib.CurrentTime):
         """ Send a ClientMessage event to client.
