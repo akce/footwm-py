@@ -155,6 +155,10 @@ class Display:
     def ungrabkey(self, keycode, modifiermask, grabwindow):
         xlib.xlib.XUngrabKey(self.xh, keycode, modifiermask, grabwindow.window)
 
+    def unmapwindow(self, window):
+        # XXX window must be an actual windowid for now. There may still be cases where we need to unmap a window with no associated object.
+        xlib.xlib.XUnmapWindow(self.xh, window)
+
     def __del__(self):
         xlib.xlib.XCloseDisplay(self.xh)
         self.xh = None

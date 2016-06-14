@@ -250,7 +250,7 @@ class ClientWindow(BaseWindow):
         self.family = [self]
 
     def hide(self):
-        xlib.xlib.XUnmapWindow(self.display.xh, self.window)
+        self.display.unmapwindow(self.window)
 
     def show(self):
         xlib.xlib.XMapWindow(self.display.xh, self.window)
@@ -654,7 +654,7 @@ class Foot(object):
             # The UnmapNotify is because client called something like XWithdrawWindow or XIconifyWindow.
             # Unmap the window, but remove when the xserver sends another UnmapNotify message with send_event=False.
             log.debug('0x%08x: Client requests unmap.. calling XUnmapWindow', e.window)
-            xlib.xlib.XUnmapWindow(self.display.xh, e.window)
+            self.display.unmapwindow(e.window)
         else:
             # Only handle if the notify event not caused by a sub-structure redirect. See man XUnmapEvent
             if e.event == e.window:
