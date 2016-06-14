@@ -442,7 +442,7 @@ class Foot(object):
                 }
         self._init_atoms()
         # TODO: worry about screens, displays, xrandr and xinerama!
-        self.root = RootWindow(self.display, xlib.xlib.XDefaultRootWindow(self.display.xh))
+        self.root = RootWindow(self.display, self.display.defaultrootwindow)
         log.debug('0x%08x: _load_root %s', self.root.window, self.root)
         eventmask = xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify
         self.display.install(self.root, eventmask)

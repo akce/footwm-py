@@ -3,7 +3,7 @@ Display module for footwm.
 
 Display abstracts away most of the direct access to the xlib library.
 
-Copyright (c) 2016 Jerry Kotland.
+Copyright (c) 2016 Akce
 """
 
 from . import xlib
@@ -21,6 +21,10 @@ class Display:
         self.xh = xlib.xlib.XOpenDisplay(displayname)
         if self.xh is None:
             raise DisplayError('Failed to connect to display {}'.format(displayname))
+
+    @property
+    def defaultrootwindow(self):
+        return xlib.xlib.XDefaultRootWindow(self.xh)
 
     @property
     def errorhandler(self):
