@@ -50,7 +50,7 @@ class BaseWindow(object):
 
     def manage(self, eventmask):
         # watch, maintain, manage, control etc.
-        xlib.xlib.XSelectInput(self.display.xh, self.window, eventmask)
+        self.display.selectinput(self, eventmask)
 
     def _xtext_to_lines(self, xtextprop):
         lines = []

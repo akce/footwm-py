@@ -187,6 +187,9 @@ class Display:
         xlib.xlib.XNextEvent(self.xh, addr(self._nextevent))
         return self._nextevent
 
+    def selectinput(self, window, eventmask):
+        xlib.xlib.XSelectInput(self.xh, window.window, eventmask)
+
     def sendevent(self, window, event, eventtype=xlib.InputEventMask.NoEvent):
         """ Do the fancy ctypes event casting before calling XSendEvent. """
         status = xlib.xlib.XSendEvent(self.xh, window.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
