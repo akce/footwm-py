@@ -167,6 +167,30 @@ class RootWindow(BaseWindow):
         super().__init__(display, window)
         self._import_children()
 
+    def manage(self, eventmask):
+        """ Install ourselves as *the* window manager. """
+        # Assume we can install, wmerrhandler will tell us if we can't be the window manager.
+        installed = True
+        def wmerrhandler(display_p, event_p):
+            nonlocal installed
+            # XSelectInput(rootwin) will set BadAccess if there's another wm running.
+            if event_p.contents.error_code == xlib.Error.BadAccess:
+                installed = False
+            # Need to return an int here - it's ignored. No explicit return will cause an error.
+            return 0
+        olderrorhandler = xlib.XSetErrorHandler(wmerrhandler)
+        super().manage(eventmask)
+        xlib.xlib.XSync(self.display, False)
+        if installed:
+            # We are now the window manager - continue install.
+            # XXX Should we remove WM_ICON_SIZE from root? In case an old WM installed it. See ICCCM 4.1.9
+            # Install X error handler.
+            xlib.XSetErrorHandler(xerrorhandler)
+        else:
+            # Exit.
+            log.error('Another WM is already running!')
+            sys.exit(1)
+
     def add_child(self, w):
         window = self._make_window(w)
         if window:
@@ -448,7 +472,7 @@ class Foot(object):
         # TODO: worry about screens, displays, xrandr and xinerama!
         self.root = RootWindow(self.display, xlib.xlib.XDefaultRootWindow(self.display))
         log.debug('0x%08x: _load_root %s', self.root.window, self.root)
-        self._install_wm()
+        self.root.manage(xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify)
         self._make_handlers()
         self.install_keymap()
         self.install_keymap(windows=[self.root])
@@ -524,30 +548,6 @@ class Foot(object):
         else:
             w.delete()
             # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
-
-    def _install_wm(self):
-        """ Install foot as *the* window manager. """
-        # Assume we can install, wmerrhandler will tell us if we can't be the window manager.
-        installed = True
-        def wmerrhandler(display_p, event_p):
-            nonlocal installed
-            # XSelectInput(rootwin) will set BadAccess if there's another wm running.
-            if event_p.contents.error_code == xlib.Error.BadAccess:
-                installed = False
-            # Need to return an int here - it's ignored. No explicit return will cause an error.
-            return 0
-        olderrorhandler = xlib.XSetErrorHandler(wmerrhandler)
-        self.root.manage(xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify)
-        xlib.xlib.XSync(self.display, False)
-        if installed:
-            # We are now the window manager - continue install.
-            # XXX Should we remove WM_ICON_SIZE from root? In case an old WM installed it. See ICCCM 4.1.9
-            # Install X error handler.
-            xlib.XSetErrorHandler(xerrorhandler)
-        else:
-            # Exit.
-            log.error('Another WM is already running!')
-            sys.exit(1)
 
     def run(self):
         event = xlib.XEvent()
