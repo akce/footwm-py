@@ -675,7 +675,6 @@ class Foot(object):
                 self.show()
 
     def __del__(self):
-        xlib.xlib.XCloseDisplay(self.display.xh)
         self.display = None
 
 def main():

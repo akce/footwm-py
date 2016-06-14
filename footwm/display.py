@@ -155,5 +155,9 @@ class Display:
     def ungrabkey(self, keycode, modifiermask, grabwindow):
         xlib.xlib.XUngrabKey(self.xh, keycode, modifiermask, grabwindow.window)
 
+    def __del__(self):
+        xlib.xlib.XCloseDisplay(self.xh)
+        self.xh = None
+
     def __str__(self):
         return 'Display({})'.format(self.displayname)
