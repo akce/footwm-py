@@ -296,18 +296,7 @@ class ClientWindow(BaseWindow):
     @property
     def wm_class(self):
         """ WM_CLASS is a tuple of resource name & class. See ICCCM 4.1.2.5 """
-        xch = xlib.XClassHint()
-        status = xlib.xlib.XGetClassHint(self.display.xh, self.window, ctypes.byref(xch))
-        if status > 0:
-            # See xlib.py: XClassHint for why we can't use ctypes.c_char_p here.
-            ret = str(ctypes.cast(xch.res_name, ctypes.c_char_p).value, 'utf8'), str(ctypes.cast(xch.res_class, ctypes.c_char_p).value, 'utf8')
-            if xch.res_name.contents is not None:
-                xlib.xlib.XFree(xch.res_name)
-            if xch.res_class.contents is not None:
-                xlib.xlib.XFree(xch.res_class)
-        else:
-            ret = "", ""
-        return ret
+        return self.display.getclasshint(self)
 
     @property
     def wm_protocols(self):
