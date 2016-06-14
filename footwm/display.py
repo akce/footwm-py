@@ -21,6 +21,10 @@ class Display:
         self.xh = xlib.xlib.XOpenDisplay(displayname)
         if self.xh is None:
             raise DisplayError('Failed to connect to display {}'.format(displayname))
+        self.atom = {}
+
+    def add_atom(self, symbol, only_if_exists=False):
+        self.atom[symbol] = xlib.xlib.XInternAtom(self.xh, bytes(symbol, 'utf8'), only_if_exists)
 
     @property
     def defaultrootwindow(self):

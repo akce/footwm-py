@@ -282,7 +282,7 @@ class ClientWindow(BaseWindow):
         ev = xlib.XClientMessageEvent()
         ev.type = xlib.EventName.ClientMessage
         ev.window = self.window
-        ev.message_type = self.atoms['WM_PROTOCOLS']
+        ev.message_type = self.display.atom['WM_PROTOCOLS']
         ev.format = 32
         ev.data.l[0] = atom
         ev.data.l[1] = time
@@ -338,7 +338,7 @@ class ClientWindow(BaseWindow):
         if status != 0:
             aids = [catoms[i] for i in range(ncount.value)]
             xlib.xlib.XFree(catoms)
-            atomnames = {v: k for k, v in self.atoms.items()}
+            atomnames = {v: k for k, v in self.display.atom.items()}
             for aid in aids:
                 try:
                     aname = atomnames[aid]
@@ -354,7 +354,7 @@ class ClientWindow(BaseWindow):
     def wm_state(self):
         state = None
         a = ctypes.byref        # a = address shorthand.
-        WM_STATE = self.atoms['WM_STATE']
+        WM_STATE = self.display.atom['WM_STATE']
         actual_type_return = xlib.Atom()
         actual_format_return = ctypes.c_int()
         nitems_return = ctypes.c_ulong(0)
@@ -380,7 +380,7 @@ class ClientWindow(BaseWindow):
         state.state = xlib.WmStateState(winstate)
         log.debug('0x%08x: Set WM_STATE state=%s', self.window, state.state)
         state.icon = 0
-        WM_STATE = self.atoms['WM_STATE']
+        WM_STATE = self.display.atom['WM_STATE']
         data_p = ctypes.cast(ctypes.byref(state), xlib.byte_p)
         long_length = int(ctypes.sizeof(state) / ctypes.sizeof(ctypes.c_long))
         # Specify as 32 (longs), that way the Xlib client will handle endian translations.
@@ -429,7 +429,6 @@ class TransientWindow(ClientWindow):
 class Foot(object):
 
     def __init__(self, displayname=None):
-        self._atoms = {}
         self.display = display.Display(displayname)
         log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
         self.keyboard = kb.Keyboard(self.display)
@@ -458,14 +457,10 @@ class Foot(object):
         self.show()
 
     def _init_atoms(self):
-        def aa(symbol, only_if_exists=False):
-            self._atoms[symbol] = xlib.xlib.XInternAtom(self.display.xh, bytes(symbol, 'utf8'), only_if_exists)
-        aa('WM_STATE')
-        aa('WM_PROTOCOLS')
-        aa('WM_DELETE_WINDOW')
-        aa('WM_TAKE_FOCUS')
-        # FIXME need a better organisation for shared atoms...
-        BaseWindow.atoms = self._atoms
+        self.display.add_atom('WM_STATE')
+        self.display.add_atom('WM_PROTOCOLS')
+        self.display.add_atom('WM_DELETE_WINDOW')
+        self.display.add_atom('WM_TAKE_FOCUS')
 
     def clear_keymap(self):
         for w in self.root.children:
