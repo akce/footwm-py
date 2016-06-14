@@ -102,6 +102,18 @@ class Display:
         self.free(kbmapping)
         return ret
 
+    def gettransientfor(self, windowid):
+        """ Is the window a transient (eg, a modal dialog box for another window?).
+        If it is, return that window's xwindow id. """
+        tf = xlib.Window()
+        tstatus = xlib.xlib.XGetTransientForHint(self.xh, windowid, addr(tf))
+        if tstatus > 0:
+            # window is transient, transientfor will contain the window id of the parent window.
+            transientfor = tf.value
+        else:
+            transientfor = None
+        return transientfor
+
     @property
     def keymodifiercodes(self):
         xmodmap = xlib.xlib.XGetModifierMapping(self.xh)

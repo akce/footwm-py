@@ -40,21 +40,6 @@ class Geometry(object):
     def __str__(self):
         return '{}(x={}, y={}, w={}, h={})'.format(self.__class__.__name__, self.x, self.y, self.w, self.h)
 
-def get_transientfor(display, windowid):
-    """ Is the window a transient (eg, a modal dialog box for another window?).
-    If it is, return that window's xwindow id. """
-    # TODO see how multiple windows are done for apps like gimp.
-    # TODO maybe WM_HINTS:WindowGroupHint
-    tf = xlib.Window()
-    tstatus = xlib.xlib.XGetTransientForHint(display.xh, windowid, ctypes.byref(tf))
-    if tstatus > 0:
-        # window is transient, transientfor will contain the window id of the parent window.
-        log.debug('0x%08x: transientfor ret=%s for=%s', windowid, tstatus, tf.value)
-        transientfor = tf.value
-    else:
-        transientfor = None
-    return transientfor
-
 class BaseWindow(object):
 
     def __init__(self, display, window):
@@ -199,7 +184,8 @@ class RootWindow(BaseWindow):
     def _make_window(self, windowid):
         """ Window object factory method.
         Will handle creating Normal, Transient managed windows. """
-        transientfor = get_transientfor(self.display, windowid)
+        transientfor = self.display.gettransientfor(windowid)
+        log.debug('0x%08x: transientfor=%s', windowid, transientfor)
         try:
             if transientfor is None:
                 # Regular window.
