@@ -234,6 +234,9 @@ class Display:
     def mapwindow(self, window):
         xlib.xlib.XMapWindow(self.xh, window.window)
 
+    def moveresizewindow(self, window, x, y, w, h):
+        xlib.xlib.XMoveResizeWindow(self.xh, window.window, x, y, w, h)
+
     @property
     def nextevent(self):
         xlib.xlib.XNextEvent(self.xh, addr(self._nextevent))

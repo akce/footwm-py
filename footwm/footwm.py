@@ -272,7 +272,7 @@ class ClientWindow(BaseWindow):
         self.wantedgeom = geom
         if self.wantedgeom != self.geom:
             log.debug('0x%08x: attempt resize %s -> %s', self.window, self.geom, self.wantedgeom)
-            xlib.xlib.XMoveResizeWindow(self.display.xh, self.window, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
+            self.display.moveresizewindow(self, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
 
 class NormalWindow(ClientWindow):
     pass
@@ -444,7 +444,7 @@ class Foot(object):
                     # Window is not the size we want, make a configure request.
                     wg = window.wantedgeom
                     log.debug('0x%08x: requesting again, wanted %s current %s', e.window, window.wantedgeom, window.geom)
-                    xlib.xlib.XMoveResizeWindow(self.display.xh, e.window, wg.x, wg.y, wg.w, wg.h)
+                    self.display.moveresizewindow(window, wg.x, wg.y, wg.w, wg.h)
 
     def handle_configurerequest(self, event):
         # Some other client tried to reconfigure e.window
