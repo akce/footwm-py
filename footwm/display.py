@@ -62,6 +62,10 @@ class Display:
     def add_atom(self, symbol, only_if_exists=False):
         self.atom[symbol] = xlib.xlib.XInternAtom(self.xh, bytes(symbol, 'utf8'), only_if_exists)
 
+    def configurewindow(self, window, changemask, windowchanges):
+        # XXX Note that window is the number for now.
+        xlib.xlib.XConfigureWindow(self.xh, window, changemask, addr(windowchanges))
+
     @property
     def defaultrootwindow(self):
         return xlib.xlib.XDefaultRootWindow(self.xh)
