@@ -123,7 +123,7 @@ class RootWindow(BaseWindow):
 
     def _import_children(self):
         self.children = []
-        for w in self.get_children():
+        for w in self.display.querytree(self):
             window = self._make_window(w)
             if window:
                 # WindowError will handle cases where override_redirect=True & XWindowAttributes fails.
@@ -168,19 +168,6 @@ class RootWindow(BaseWindow):
         else:
             w = None
         return w
-
-    def get_children(self):
-        a = ctypes.byref        # a = address shorthand.
-        root_return = xlib.Window(0)
-        parent_of_root = xlib.Window(0)
-        childrenp = xlib.window_p()
-        nchildren = ctypes.c_uint(0)
-        # XXX assert that root_return == root?
-        status = xlib.xlib.XQueryTree(self.display.xh, self.window, a(root_return), a(parent_of_root), a(childrenp), a(nchildren))
-        children = [childrenp[i] for i in range(nchildren.value)]
-        if nchildren.value > 0:
-            xlib.xlib.XFree(childrenp)
-        return children
 
     def pick(self, index):
         """ Select the family of windows that belong to the window at the given index. """
@@ -597,7 +584,7 @@ class Foot(object):
                     # Check that the window still exists!
                     # We have to do this check or else writing to a destroyed window will cause our event loop to halt.
                     # XXX Should we XGrabServer here?
-                    wids = self.root.get_children()
+                    wids = self.display.querytree(self.root)
                     if window.window in wids:
                         # Mark window Withdrawn. See ICCCM 4.1.3.1
                         window.wm_state = xlib.WmStateState.Withdrawn

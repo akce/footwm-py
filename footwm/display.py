@@ -211,6 +211,18 @@ class Display:
         xlib.xlib.XNextEvent(self.xh, addr(self._nextevent))
         return self._nextevent
 
+    def querytree(self, window):
+        root_return = xlib.Window(0)
+        parent_of_root = xlib.Window(0)
+        childrenp = xlib.window_p()
+        nchildren = ctypes.c_uint(0)
+        # XXX assert that root_return == root?
+        status = xlib.xlib.XQueryTree(self.xh, window.window, addr(root_return), addr(parent_of_root), addr(childrenp), addr(nchildren))
+        children = [childrenp[i] for i in range(nchildren.value)]
+        if nchildren.value > 0:
+            self.free(childrenp)
+        return children
+
     def selectinput(self, window, eventmask):
         xlib.xlib.XSelectInput(self.xh, window.window, eventmask)
 
