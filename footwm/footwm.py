@@ -11,6 +11,7 @@ import logging
 # Local modules.
 import footwm.xlib as xlib
 from . import display
+from . import ewmh
 import footwm.kb as kb
 import footwm.log
 
@@ -333,6 +334,8 @@ class Foot(object):
         self._make_handlers()
         self.install_keymap()
         self.install_keymap(windows=[self.root])
+        self.ewmh = ewmh.Ewmh(self.display, self.root)
+        self.ewmh.clientliststacking(self.root.children)
         self.show()
 
     def _init_atoms(self):
@@ -360,6 +363,7 @@ class Foot(object):
 
     def _make_handlers(self):
         self.eventhandlers = {
+                xlib.EventName.ClientMessage:       self.handle_clientmessage,
                 xlib.EventName.CreateNotify:        self.handle_createnotify,
                 xlib.EventName.ConfigureNotify:     self.handle_configurenotify,
                 xlib.EventName.ConfigureRequest:    self.handle_configurerequest,
@@ -385,6 +389,7 @@ class Foot(object):
                 log.debug('0x%08x: showing window=%s', window.window, window)
             # Focus the very top window.
             if family:
+                self.ewmh.activewindow(window)
                 window.focus()
             # Hide every window that's not in the family of windows.
             for window in self.root.children:
@@ -419,6 +424,17 @@ class Foot(object):
 
     def noop(self, event):
         log.debug('noop %s', xlib.EventName(event.type))
+
+    def handle_clientmessage(self, event):
+        e = event.xclient
+        if e.message_type == self.display.atom['_NET_ACTIVE_WINDOW']:
+            window = self.root.find_child(e.window)
+            if window:
+                self.show(index=self.root.children.index(window))
+        elif e.message_type == self.display.atom['_NET_CLOSE_WINDOW']:
+            window = self.root.find_child(e.window)
+            if window:
+                window.delete()
 
     def handle_createnotify(self, event):
         # New window has been created.
@@ -483,6 +499,7 @@ class Foot(object):
                 log.debug('0x%08x: not found in root %s', e.window, self.root)
             else:
                 self.root.remove_child(w)
+                self.ewmh.clientliststacking(self.root.children)
                 log.debug('0x%08x: removed from root 0x%08x', w.window, self.root.window)
             self.show()
 
@@ -538,6 +555,7 @@ class Foot(object):
         if window:
             # Put window to the top of the list.
             self.show(index=self.root.children.index(window))
+            self.ewmh.clientliststacking(self.root.children)
 
     def handle_unmapnotify(self, event):
         e = event.xunmap

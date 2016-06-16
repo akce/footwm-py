@@ -62,13 +62,28 @@ class Display:
     def add_atom(self, symbol, only_if_exists=False):
         self.atom[symbol] = xlib.xlib.XInternAtom(self.xh, bytes(symbol, 'utf8'), only_if_exists)
 
+    def changeproperty(self, window, propertyname, type_, format_, mode, data, nelements):
+        try:
+            w = window.window
+        except AttributeError:
+            w = window
+        return xlib.xlib.XChangeProperty(self.xh, w, self.atom[propertyname], type_, format_, mode, ctypes.cast(data, xlib.byte_p), nelements)
+
     def configurewindow(self, window, changemask, windowchanges):
         # XXX Note that window is the number for now.
         xlib.xlib.XConfigureWindow(self.xh, window, changemask, addr(windowchanges))
 
+    def createsimplewindow(self, parent, x, y, w, h, borderw, border, background):
+        # XXX Should we wrap the return in a Window object?
+        return xlib.xlib.XCreateSimpleWindow(self.xh, parent.window, x, y, w, h, borderw, border, background)
+
     @property
     def defaultrootwindow(self):
         return xlib.xlib.XDefaultRootWindow(self.xh)
+
+    def destroywindow(self, window):
+        # XXX Note that window is the number for now.
+        xlib.xlib.XDestroyWindow(self.xh, window)
 
     @property
     def displaykeycodes(self):

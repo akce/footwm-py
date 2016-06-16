@@ -201,6 +201,13 @@ xlib.XQueryTree.argtypes = display_p, Window, window_p, window_p, ctypes.POINTER
 xlib.XGetTransientForHint.restype = Status
 xlib.XGetTransientForHint.argtypes = display_p, Window, window_p
 
+# Window XCreateSimpleWindow(Display *display, Window parent, int x, int y, unsigned int width, unsigned int height, unsigned int border_width, unsigned long border, unsigned long background);
+xlib.XCreateSimpleWindow.restype = Window
+xlib.XCreateSimpleWindow.argtypes = display_p, Window, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_ulong
+
+# int XDestroyWindow(Display *display, Window w);
+xlib.XDestroyWindow.argtypes = display_p, Window
+
 # int XFree(void *data);
 xlib.XFree.argtypes = ctypes.c_void_p,
 
@@ -615,7 +622,9 @@ xlib.XMoveResizeWindow.argtypes = display_p, Window, ctypes.c_int, ctypes.c_int,
 
 # X protocol atoms, see Xatom.h
 class XA(ctypes.c_ulong, EnumMixin):
+    ATOM        = 4
     STRING      = 31
+    WINDOW      = 33
 
 # Xutil.h
 class XICCEncodingStyle(ctypes.c_ulong, EnumMixin):
