@@ -6,7 +6,7 @@ Implements only those parts relevant for footwm.
 See:
     https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html
 
-Copyright (c) 2016 Jerry Kotland.
+Copyright (c) 2016 Akce
 """
 
 ewmh_major = 1
