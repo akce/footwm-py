@@ -52,7 +52,6 @@ class Foot(object):
         self.display.errorhandler = xerrorhandler
         self._make_handlers()
         self.install_keymap()
-        self.install_keymap(windows=[self.root])
         self.ewmh = ewmh.Ewmh(self.display, self.root)
         self.ewmh.clientliststacking(self.stacklist)
         self.show()
@@ -75,22 +74,15 @@ class Foot(object):
             window.manage(xlib.InputEventMask.StructureNotify)
 
     def clear_keymap(self):
-        for window in self.stacklist:
-            self.display.ungrabkey(xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, window)
+        self.display.ungrabkey(xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, self.root)
 
-    def install_keymap(self, windows=None):
+    def install_keymap(self):
         """ Installs the window manager top level keymap to selected windows. Install to all managed windows if windows is None. """
-        if windows is None:
-            ws = self.stacklist
-        else:
-            ws = windows
         for keysymname in self.keymap:
             # TODO handle locked modifiers scroll-lock, num-lock, caps-lock.
             keycode, modifier = self.keyboard.keycodes[keysymname]
-            # XXX Should we install the keymap only when the window is focused?
-            for window in ws:
-                self.display.grabkey(keycode, modifier, window, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
-                log.debug('0x%08x: install keygrab keycode=0x%x modifier=0x%x', window.window, keycode, modifier)
+            self.display.grabkey(keycode, modifier, self.root, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
+            log.debug('0x%08x: install keygrab keycode=0x%x modifier=0x%x', self.root.window, keycode, modifier)
 
     def _make_handlers(self):
         self.eventhandlers = {
@@ -277,7 +269,7 @@ class Foot(object):
         self.clear_keymap()
         # Recreate keyboard settings.
         self.keyboard = kb.Keyboard(self.display)
-        self.install_keymap(windows=[self.root])
+        self.install_keymap()
 
     def handle_mapnotify(self, event):
         # Server has displayed the window.
@@ -308,7 +300,6 @@ class Foot(object):
                 self.stacklist.insert(i, window)
             else:
                 i = self.stacklist.index(windowid)
-            self.install_keymap(windows=[window])
             window.manage(xlib.InputEventMask.StructureNotify)
             self.show(index=i)
             self.ewmh.clientliststacking(self.stacklist)
