@@ -32,6 +32,7 @@ class Ewmh:
         supported = [
                 # Supported EWMH atoms.
                 '_NET_ACTIVE_WINDOW',
+                '_NET_CLIENT_LIST',
                 '_NET_CLIENT_LIST_STACKING',
                 '_NET_CLOSE_WINDOW',
                 '_NET_SUPPORTING_WM_CHECK',

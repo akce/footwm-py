@@ -53,8 +53,14 @@ class Foot(object):
         self._make_handlers()
         self.install_keymap()
         self.ewmh = ewmh.Ewmh(self.display, self.root)
+        self.ewmh.clientlist(self.clientlist)
         self.ewmh.clientliststacking(self.stacklist)
         self.show()
+
+    @property
+    def clientlist(self):
+        """ Client list of windows in creation order. """
+        return [window for windowid, window in self.root.children.items() if window in self.stacklist]
 
     def _init_atoms(self):
         self.display.add_atom('WM_STATE')
@@ -302,6 +308,7 @@ class Foot(object):
                 i = self.stacklist.index(windowid)
             window.manage(xlib.InputEventMask.StructureNotify)
             self.show(index=i)
+            self.ewmh.clientlist(self.clientlist)
             self.ewmh.clientliststacking(self.stacklist)
 
     def handle_unmapnotify(self, event):
@@ -335,6 +342,7 @@ class Foot(object):
         except ValueError:
             pass
         else:
+            self.ewmh.clientlist(self.clientlist)
             self.ewmh.clientliststacking(self.stacklist)
 
     def __del__(self):
