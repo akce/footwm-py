@@ -1,8 +1,43 @@
 """
 Window classes for footwm.
 
-Copyright (c) 2016 Jerry Kotland
+Copyright (c) 2016 Akce
+
+This module has windows for root and normal/transient on both the
+window manager and client sides.
+
+ie,
+- WmRoot: Window manager root window operations
+- WmNormal/WmTransient: Window manager operations for normal and transient windows
+- ClientRoot: Root window operations for clients
+- ClientWindow: Window operations for normal windows from the clients perspective.
+
+Those main classes use inheritance of ICCCM, ewmh, and custom
+mixins to build their interfaces. That way the rest of the system
+communicate via the window interface, and this module handles
+"delegation" to the appropriate interface..
+
+Note that the parent classes instanciate things that the child classes need so
+there is a method to the madness behind the inheritance order. New
+feature classes must be added to the left-end of the inheritance
+resolution order.
+
+eg,
+% python3
+>>> from footwm import window
+>>> window.WmRoot.mro()
+[<class 'footwm.window.WmRoot'>, <class 'footwm.ewmh.WmRootMixin'>, <class 'footwm.ewmh.Base'>, <class 'footwm.window.Base'>, <class 'object'>]
+>>> window.WmNormal.mro()
+[<class 'footwm.window.WmNormal'>, <class 'footwm.window.WmWindow'>, <class 'footwm.window.WmWindowClientWindow'>, <class 'footwm.window.Base'>, <class 'object'>]
+>>> window.WmTransient.mro()
+[<class 'footwm.window.WmTransient'>, <class 'footwm.window.WmWindow'>, <class 'footwm.window.WmWindowClientWindow'>, <class 'footwm.window.Base'>, <class 'object'>]
+>>> window.ClientRoot.mro()
+[<class 'footwm.window.ClientRoot'>, <class 'footwm.command.ClientRootMixin'>, <class 'footwm.command.Base'>, <class 'footwm.ewmh.ClientRootMixin'>, <class 'footwm.ewmh.Base'>, <class 'footwm.window.Base'>, <class 'object'>]
+>>> window.ClientWindow.mro()
+[<class 'footwm.window.ClientWindow'>, <class 'footwm.window.WmWindowClientWindow'>, <class 'footwm.window.Base'>, <class 'object'>]
 """
+
+import collections
 
 from . import log as xlog
 from . import xlib
@@ -46,15 +81,13 @@ class BaseWindow(object):
     def _load_window_attr(self):
         wa = self.display.getwindowattributes(self)
         if wa:
-            if wa.override_redirect:
-                # No point doing anything else with override_redirect windows. We don't manage them.
-                raise WindowError('Ignore window, override_redirect is True')
             # Extract the parts of XWindowAttributes that we need.
+            self.override_redirect = wa.override_redirect
             self.geom = Geometry(wa)
             self.map_state = wa.map_state.value
             log.debug('0x%08x: windowattr=%s', self.window, wa)
         else:
-            raise WindowError('XGetWindowAttributes failed')
+            log.debug('0x%08x: XGetWindowAttributes failed', self.window)
 
     def __str__(self):
         args = [
@@ -100,78 +133,31 @@ class RootWindow(BaseWindow):
         super().__init__(display, window)
         self._import_children()
 
-    def add_child(self, w):
-        window = self._make_window(w)
-        if window:
-            # Add the window to our known list and start managing.
-            self.children.insert(0, window)
+    def newchild(self, windowid):
+        """ Create a new child window. """
+        window = self._make_window(windowid)
+        # Add the window to our child dict.
+        self.children[windowid] = window
         return window
 
     def _import_children(self):
-        self.children = []
-        for w in self.display.querytree(self):
-            window = self._make_window(w)
-            if window:
-                # WindowError will handle cases where override_redirect=True & XWindowAttributes fails.
-                # We have two extra restrictions when importing windows at program startup.
-                # Allow import of windows that have MapState=IsViewable, or WM_STATE exists.
-                # This is because X has an extra restriction about windows to manage. ie, X apps can create children of the
-                # root window, with their override_redirect=False but never Map them and the window manager then has to ignore them.
-                # With these checks we're assuming that IsViewable means the window will want to Map itself or that a prior window
-                # manager decided to manage the window and added a WM_STATE attribute so we'll manage it too.
-                if window.map_state == xlib.MapState.IsViewable:
-                    append = True
-                elif window.wm_state is not None:
-                    append = True
-                else:
-                    append = False
-                if append:
-                    self.children.append(window)
+        """ Import all the children of the root window, regardless of whether they have override_redirect set.
+        The window manager will keep its own managed window lists. """
+        self.children = collections.OrderedDict()
+        for windowid in self.display.querytree(self):
+            self.children[windowid] = self._make_window(windowid)
 
     def _make_window(self, windowid):
         """ Window object factory method.
         Will handle creating Normal, Transient managed windows. """
         transientfor = self.display.gettransientfor(windowid)
         log.debug('0x%08x: transientfor=%s', windowid, transientfor)
-        try:
-            if transientfor is None:
-                # Regular window.
-                window = NormalWindow(self.display, windowid)
-            else:
-                window = TransientWindow(self.display, windowid, self.find_child(transientfor))
-        except WindowError as e:
-            log.debug('0x%08x: %s', windowid, str(e))
-            window = None
+        if transientfor is None:
+            # Regular window.
+            window = NormalWindow(self.display, windowid)
         else:
-            window.manage(xlib.InputEventMask.StructureNotify)
+            window = TransientWindow(self.display, windowid, self.children.get(transientfor, None))
         return window
-
-    def find_child(self, window):
-        """ Find a child window object. """
-        for w in self.children:
-            if window == w.window:
-                break
-        else:
-            w = None
-        return w
-
-    def pick(self, index):
-        """ Select the family of windows that belong to the window at the given index. """
-        window = self.children[index]
-        # family accounts for transients
-        # TODO window groups. See ICCCM 4.1.11
-        family = window.family
-        for w in family:
-            self.children.remove(w)
-        for w in reversed(family):
-            self.children.insert(0, w)
-        return family
-
-    def remove_child(self, childwin):
-        try:
-            self.children.remove(childwin)
-        except ValueError:
-            log.error('0x%08x: Window.remove_child: childwin not found in children window=%s', self.window, childwin)
 
 class ClientWindow(BaseWindow):
 
