@@ -5,7 +5,6 @@ Copyright (c) 2016 Akce
 """
 
 # Python standard modules.
-import functools
 import logging
 
 # Local modules.
@@ -13,60 +12,40 @@ import footwm.xlib as xlib
 from . import display
 from . import ewmh
 from . import window as xwin
-import footwm.kb as kb
+from . import xevent
 import footwm.log
 
 log = footwm.log.make(handler=logging.FileHandler('debug.log'))
 log.addHandler(logging.StreamHandler())
-
-def logkey(keyargs):
-    wm, window, keysym, keycode, modifiers = keyargs
-    log.debug('0x%08x: logkey keysym=%s keycode=%d modifiers=0x%x', window.window, keysym, keycode, modifiers)
 
 class Foot(object):
 
     def __init__(self, displayname=None):
         self.display = display.Display(displayname)
         log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
-        self.keyboard = kb.Keyboard(self.display)
-        self.keymap = {
-                'F5': functools.partial(self.show, 1),
-                'F6': functools.partial(self.show, 2),
-                'F7': functools.partial(self.show, 3),
-                'F8': functools.partial(self.show, 4),
-                'F9': functools.partial(self.delete_window, 0),
-                }
-        self._init_atoms()
         # TODO: worry about screens, displays, xrandr and xinerama!
         self.root = xwin.RootWindow(self.display, self.display.defaultrootwindow)
-        log.debug('0x%08x: _load_root %s', self.root.window, self.root)
         eventmask = xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify
         self.display.install(self.root, eventmask)
         # We are now the window manager - continue install.
         self._importwindows()
         self._managewindows()
+        log.debug('0x%08x: root %s', self.root.window, self.root)
         # XXX Should we remove WM_ICON_SIZE from root? In case an old WM installed it. See ICCCM 4.1.9
         def xerrorhandler(display, xerrorevent):
             log.error('X Error: %s', xerrorevent)
             return 0
         self.display.errorhandler = xerrorhandler
         self._make_handlers()
-        self.install_keymap()
-        self.ewmh = ewmh.Ewmh(self.display, self.root)
-        self.ewmh.clientlist(self.clientlist)
-        self.ewmh.clientliststacking(self.stacklist)
+        self.ewmh = ewmh.EwmhWM(self.display, self.root)
+        self.ewmh.clientlist = self.clientlist
+        self.ewmh.clientliststacking = self.stacklist
         self.show()
 
     @property
     def clientlist(self):
         """ Client list of windows in creation order. """
         return [window for windowid, window in self.root.children.items() if window in self.stacklist]
-
-    def _init_atoms(self):
-        self.display.add_atom('WM_STATE')
-        self.display.add_atom('WM_PROTOCOLS')
-        self.display.add_atom('WM_DELETE_WINDOW')
-        self.display.add_atom('WM_TAKE_FOCUS')
 
     def _importwindows(self):
         """ Import windows into stacklist that look like they'll need to be managed. """
@@ -79,17 +58,6 @@ class Foot(object):
         for window in self.stacklist:
             window.manage(xlib.InputEventMask.StructureNotify)
 
-    def clear_keymap(self):
-        self.display.ungrabkey(xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, self.root)
-
-    def install_keymap(self):
-        """ Installs the window manager top level keymap to selected windows. Install to all managed windows if windows is None. """
-        for keysymname in self.keymap:
-            # TODO handle locked modifiers scroll-lock, num-lock, caps-lock.
-            keycode, modifier = self.keyboard.keycodes[keysymname]
-            self.display.grabkey(keycode, modifier, self.root, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
-            log.debug('0x%08x: install keygrab keycode=0x%x modifier=0x%x', self.root.window, keycode, modifier)
-
     def _make_handlers(self):
         self.eventhandlers = {
                 xlib.EventName.ClientMessage:       self.handle_clientmessage,
@@ -97,93 +65,70 @@ class Foot(object):
                 xlib.EventName.ConfigureNotify:     self.handle_configurenotify,
                 xlib.EventName.ConfigureRequest:    self.handle_configurerequest,
                 xlib.EventName.DestroyNotify:       self.handle_destroynotify,
-                xlib.EventName.KeyPress:            self.handle_keypress,
-                xlib.EventName.MappingNotify:       self.handle_mappingnotify,
                 xlib.EventName.MapNotify:           self.handle_mapnotify,
                 xlib.EventName.MapRequest:          self.handle_maprequest,
                 xlib.EventName.UnmapNotify:         self.handle_unmapnotify,
                 }
 
-    def movetofront(self, index):
-        """ Select the family of windows that belong to the window at the given index.
-        raise IndexError if the index is invalid for self.stacklist. """
-        # Get the window for index.
-        window = self.stacklist[index]
+    def _movetofront(self, win):
+        """ Select the family of windows that belong to the window. """
         # family accounts for transients
         # TODO window groups. See ICCCM 4.1.11
-        family = window.family
+        family = win.family
         for w in family:
             self.stacklist.remove(w)
         for w in reversed(family):
-            self.stacklist.insert(0, window)
+            self.stacklist.insert(0, w)
+        self.ewmh.clientliststacking = self.stacklist
         return family
 
-    def show(self, index=0, keyargs=None):
+    def show(self, win=None):
         """ Pick a child window to bring to front. Any parents of transient windows will also be shown. """
-        try:
-            family = self.movetofront(index=index)
-        except IndexError:
-            log.warning('0x{:08x}: movetofront index={} out of bounds. children len={}'.format(self.root.window, index, len(self.root.children)))
-        else:
-            # XXX Only select input on mapped (visible) window(s).
-            for window in reversed(family):
-                window.resize(self.root.geom)
-                window.show()
-                log.debug('0x%08x: showing window=%s', window.window, window)
-            # Focus the very top window.
-            if family:
-                self.ewmh.activewindow(window)
-                window.focus()
-            # Hide every window that's not in the family of windows.
-            for window in self.stacklist:
-                if window not in family:
-                    log.debug('0x%08x: hiding %s', window.window, window)
-                    window.hide()
-
-    def delete_window(self, index, keyargs=None):
-        """ Delete a window. """
-        try:
-            w = self.stacklist[index]
-        except IndexError:
-            pass
-        else:
-            w.delete()
-            # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
-
-    def run(self):
-        while True:
+        if win is None:
+            # Redraw with the first window's family when win isn't given.
             try:
-                event = self.display.nextevent
-                e = xlib.EventName(event.type)
-                #log.debug('event: %s', e)
-                try:
-                    handler = self.eventhandlers[e.value]
-                except KeyError:
-                    log.error('unhandled event %s', e)
-                else:
-                    handler(event)
-            except Exception as e:
-                log.exception(e)
+                family = self.clientlist[0].family
+            except IndexError:
+                log.warning('0x{:08x}: show clientlist is empty.'.format(self.root.window))
+                family = []
+        else:
+            family = self._movetofront(win=win)
+        for w in reversed(family):
+            w.resize(self.root.geom)
+            w.show()
+            log.debug('0x%08x: showing window=%s', w.window, w)
+        # Focus the very top window.
+        if family:
+            self.ewmh.activewindow = w
+            w.focus()
+        # Hide every window that's not in the family of windows.
+        for w in self.stacklist:
+            if w not in family:
+                log.debug('0x%08x: hiding %s', w.window, w)
+                w.hide()
 
     def noop(self, event):
         log.debug('noop %s', xlib.EventName(event.type))
 
     def handle_clientmessage(self, event):
         e = event.xclient
+        log.debug('handle_clientmessage')
         if e.message_type == self.display.atom['_NET_ACTIVE_WINDOW']:
+            log.debug('0x%08x: _NET_ACTIVE_WINDOW', e.window)
             try:
-                window = self.root.children[e.window]
+                win = self.root.children[e.window]
             except KeyError:
-                pass
+                log.debug('0x%08x: Unknown window, cannot set as active', e.window)
             else:
-                self.show(index=self.stacklist.index(window))
+                self.show(win=win)
         elif e.message_type == self.display.atom['_NET_CLOSE_WINDOW']:
             try:
-                window = self.root.children[e.window]
+                win = self.root.children[e.window]
             except KeyError:
                 pass
             else:
-                window.delete()
+                win.delete()
+                # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
 
     def handle_createnotify(self, event):
         # New window has been created.
@@ -251,32 +196,6 @@ class Foot(object):
                 log.debug('0x%08x: not found in root %s', e.window, self.root)
             self.show()
 
-    def handle_keypress(self, event):
-        """ User has pressed a key that we've grabbed. """
-        e = event.xkey
-        log.debug('0x%08x: handle_keypress keycode=0x%x modifiers=%s', e.window, e.keycode, e.state)
-        # Convert keycode to keysym and call the associated handler.
-        # TODO handle locked modifiers scroll-lock, num-lock, caps-lock.
-        try:
-            keysym = self.keyboard.keysyms[(e.keycode, e.state.value)]
-        except KeyError:
-            log.error('0x%08x: no keysym for (keycode, modifier)', e.window)
-        else:
-            try:
-                keyfunc = self.keymap[keysym]
-            except KeyError:
-                log.error('0x%08x: no function for keysym=%s', e.window, keysym)
-            else:
-                keyargs = (self, self.root, keysym, e.keycode, e.state.value)
-                keyfunc(keyargs=keyargs)
-
-    def handle_mappingnotify(self, event):
-        """ X server has had a keyboard mapping changed. Update our keyboard layer. """
-        self.clear_keymap()
-        # Recreate keyboard settings.
-        self.keyboard = kb.Keyboard(self.display)
-        self.install_keymap()
-
     def handle_mapnotify(self, event):
         # Server has displayed the window.
         e = event.xmap
@@ -296,20 +215,18 @@ class Foot(object):
         # A window has requested that it be shown.
         windowid = event.xmaprequest.window
         try:
-            window = self.root.children[windowid]
+            win = self.root.children[windowid]
         except KeyError:
             log.error('0x%08x: MapRequest for unknown window!!!', w)
         else:
             # Put window to the top of the list and update display.
-            if window not in self.stacklist:
+            if win not in self.stacklist:
                 i = 0
-                self.stacklist.insert(i, window)
-            else:
-                i = self.stacklist.index(windowid)
-            window.manage(xlib.InputEventMask.StructureNotify)
-            self.show(index=i)
-            self.ewmh.clientlist(self.clientlist)
-            self.ewmh.clientliststacking(self.stacklist)
+                self.stacklist.insert(i, win)
+            win.manage(xlib.InputEventMask.StructureNotify)
+            self.show(win=win)
+            self.ewmh.clientlist = self.clientlist
+            self.ewmh.clientliststacking = self.stacklist
 
     def handle_unmapnotify(self, event):
         e = event.xunmap
@@ -323,27 +240,27 @@ class Foot(object):
             if e.event == e.window and e.window in self.stacklist:
                 # X has unmapped the window, we can now put it in the withdrawn state.
                 try:
-                    window = self.root.children[e.window]
+                    win = self.root.children[e.window]
                 except KeyError:
                     log.error('0x%08x: UnmapRequest for unknown window!!!', e.window)
                 else:
                     # Mark window Withdrawn. See ICCCM 4.1.3.1
-                    window.wm_state = xlib.WmStateState.Withdrawn
-                    log.debug('0x%08x: Unmap successful %s', e.window, window)
+                    win.wm_state = xlib.WmStateState.Withdrawn
+                    log.debug('0x%08x: Unmap successful %s', e.window, win)
                     # Since the window has been unmapped(hidden) show the next window in the list.
                 self.show()
 
-    def _removewindow(self, window):
+    def _removewindow(self, win):
         """ Remove the window from window lists. """
-        del self.root.children[window.window]
+        del self.root.children[win.window]
         # Remove from our own managed lists, and from the ewmh properties.
         try:
-            self.stacklist.remove(window)
+            self.stacklist.remove(win)
         except ValueError:
             pass
         else:
-            self.ewmh.clientlist(self.clientlist)
-            self.ewmh.clientliststacking(self.stacklist)
+            self.ewmh.clientlist = self.clientlist
+            self.ewmh.clientliststacking = self.stacklist
 
     def __del__(self):
         self.display = None
@@ -373,4 +290,4 @@ def main():
     except Exception as e:
         log.exception(e)
     else:
-        foot.run()
+        xevent.run(foot.display, foot.eventhandlers)

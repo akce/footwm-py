@@ -122,7 +122,7 @@ class BaseWindow(object):
         try:
             # RootWindow
             if self.children:
-                args.append("children=[{}]".format(' '.join('0x{:08x}'.format(x.window) for x in self.children)))
+                args.append("children=[{}]".format(' '.join('0x{:08x}'.format(x.window) for x in self.children.values())))
         except AttributeError:
             pass
         return '{}({})'.format(self.__class__.__name__, ' '.join(args))

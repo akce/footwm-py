@@ -58,6 +58,17 @@ class Display:
             raise DisplayError('Failed to connect to display {}'.format(displayname))
         self.atom = {}
         self._nextevent = xlib.XEvent()
+        self._init_atoms()
+
+    def _init_atoms(self):
+        """ Initialise common atoms. """
+        # UTF8 data type. This was originally an XFree86 extension.
+        self.add_atom('UTF8_STRING')
+        # From ICCCM.
+        self.add_atom('WM_STATE')
+        self.add_atom('WM_PROTOCOLS')
+        self.add_atom('WM_DELETE_WINDOW')
+        self.add_atom('WM_TAKE_FOCUS')
 
     def add_atom(self, symbol, only_if_exists=False):
         self.atom[symbol] = xlib.xlib.XInternAtom(self.xh, bytes(symbol, 'utf8'), only_if_exists)
@@ -215,6 +226,39 @@ class Display:
                 state = sp.state
             xlib.xlib.XFree(prop_return)
         return state
+
+    def getpropertywindowid(self, win, propname):
+        wid = None
+        propatom = self.atom[propname]
+        actual_type_return = xlib.Atom()
+        actual_format_return = ctypes.c_int()
+        nitems_return = ctypes.c_ulong(0)
+        bytes_after_return = ctypes.c_ulong()
+        prop_return = xlib.byte_p()
+        llen = int(ctypes.sizeof(xlib.Window) / ctypes.sizeof(ctypes.c_long))
+        #llen = 1
+        ret = xlib.xlib.XGetWindowProperty(self.xh, win.window, propatom, 0, llen, False, xlib.XA.WINDOW, addr(actual_type_return), addr(actual_format_return), addr(nitems_return), addr(bytes_after_return), addr(prop_return))
+        if ret == 0:
+            if nitems_return.value > 0:
+                wid = ctypes.cast(prop_return, xlib.window_p).contents.value
+            self.free(prop_return)
+        return wid
+
+    def getpropertywindowids(self, win, propname):
+        wids = []
+        propatom = self.atom[propname]
+        actual_type_return = xlib.Atom()
+        actual_format_return = ctypes.c_int()
+        nitems_return = ctypes.c_ulong(0)
+        bytes_after_return = ctypes.c_ulong()
+        prop_return = xlib.byte_p()
+        llen = 4096
+        ret = xlib.xlib.XGetWindowProperty(self.xh, win.window, propatom, 0, llen, False, xlib.XA.WINDOW, addr(actual_type_return), addr(actual_format_return), addr(nitems_return), addr(bytes_after_return), addr(prop_return))
+        if ret == 0:
+            data = ctypes.cast(prop_return, xlib.window_p)
+            wids = [data[i] for i in range(nitems_return.value)]
+            self.free(prop_return)
+        return wids
 
     @property
     def keymodifiercodes(self):

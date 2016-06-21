@@ -1,0 +1,12 @@
+#! /usr/bin/env python3
+"""
+FootKeys run script.
+
+Footkeys associates commands with key sequences.
+
+Copyright (c) 2016 Jerry Kotland
+"""
+
+from footwm import footkeys
+
+footkeys.main()

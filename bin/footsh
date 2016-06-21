@@ -1,0 +1,8 @@
+#! /usr/bin/env python3
+#
+# Footshell run script.
+#
+
+from footwm import footsh
+
+footsh.main()

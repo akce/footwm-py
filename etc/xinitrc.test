@@ -1,5 +1,6 @@
 export PYTHONPATH=.
 
 k
+./bin/footkeys &
 ./bin/footwm &
 xterm

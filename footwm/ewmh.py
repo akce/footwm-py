@@ -17,19 +17,14 @@ import ctypes
 
 from . import xlib
 
-class Ewmh:
-
+class EwmhClient:
+    """ EWMH support for client windows. """
     def __init__(self, display, root):
         """ Initialise EWMH support. """
         self.display = display
         self.root = root
-        self._initatoms()
-        self._initsupportingwmcheck()
-
-    def _initatoms(self):
-        """ Initialise the EWMH atoms we support. """
         ## Initialise EWMH ATOMs.
-        supported = [
+        self.supported = [
                 # Supported EWMH atoms.
                 '_NET_ACTIVE_WINDOW',
                 '_NET_CLIENT_LIST',
@@ -39,14 +34,61 @@ class Ewmh:
                 '_NET_WM_FULL_PLACEMENT',
                 '_NET_WM_NAME',
                 ]
-        self.display.add_atom('_NET_SUPPORTED')
-        # UTF8 data type.
-        self.display.add_atom('UTF8_STRING')
-        for s in supported:
+        for s in self.supported:
             self.display.add_atom(s)
-        ls = len(supported)
+        self.display.add_atom('_NET_SUPPORTED')
+
+    @property
+    def clientlist(self):
+        """ _NET_CLIENT_LIST """
+        return self._getwindows('_NET_CLIENT_LIST')
+
+    @property
+    def clientliststacking(self):
+        """ _NET_CLIENT_LIST_STACKING """
+        return self._getwindows('_NET_CLIENT_LIST_STACKING')
+
+    def _getwindows(self, propname):
+        wids = self.display.getpropertywindowids(self.root, propname)
+        for wid in wids:
+            if wid not in self.root.children:
+                self.root.newchild(wid)
+        return [self.root.children[x] for x in wids]
+
+    @property
+    def activewindow(self):
+        wid = self.display.getpropertywindowid(self.root, '_NET_ACTIVE_WINDOW')
+        try:
+            aw = self.root.children[wid]
+        except IndexError:
+            aw = self.root.newchild(wid)
+        return aw
+
+    def clientmessage(self, msg, win):
+        """ Send an EWMH client message to the window manager.
+        See EWMH: Root Window Properties (and Related Messages). """
+        dest = self.root
+        eventmask = xlib.InputEventMask.SubstructureNotify | xlib.InputEventMask.SubstructureRedirect
+        ev = xlib.XClientMessageEvent()
+        ev.type = xlib.EventName.ClientMessage
+        ev.window = win.window
+        ev.message_type = self.display.atom[msg]
+        ev.send_event = True
+        ev.format = 32
+        return self.display.sendevent(self.root, ev, eventtype=eventmask)
+
+class EwmhWM(EwmhClient):
+    """ EWMH Window Manager support. """
+    def __init__(self, display, root):
+        super().__init__(display, root)
+        self._installwmsupport()
+        self._initsupportingwmcheck()
+
+    def _installwmsupport(self):
+        """ Install atoms required by window managers. """
+        ls = len(self.supported)
         csupported = (ctypes.c_ulong * ls)()
-        for i, s in enumerate(supported):
+        for i, s in enumerate(self.supported):
             csupported[i] = self.display.atom[s]
         # TODO see if I can nicely push the ctypes stuff into display.
         self.display.changeproperty(self.root, '_NET_SUPPORTED', xlib.XA.ATOM, 32, xlib.PropMode.Replace, ctypes.byref(csupported), ls)
@@ -69,10 +111,32 @@ class Ewmh:
             cwinname[i] = b
         self.display.changeproperty(self.window, '_NET_WM_NAME', self.display.atom['UTF8_STRING'], 8, xlib.PropMode.Replace, ctypes.byref(cwinname), blen)
 
+    @property
+    def activewindow(self):
+        return super().activewindow
+
+    @activewindow.setter
+    def activewindow(self, window):
+        """ _NET_ACTIVE_WINDOW """
+        cwin = xlib.Window(window.window)
+        self.display.changeproperty(self.root, '_NET_ACTIVE_WINDOW', xlib.XA.WINDOW, 32, xlib.PropMode.Replace, ctypes.byref(cwin), 1)
+
+    @property
+    def clientlist(self):
+        """ _NET_CLIENT_LIST """
+        return super().clientlist
+
+    @property
+    def clientliststacking(self):
+        """ _NET_CLIENT_LIST_STACKING """
+        return super().clientliststacking
+
+    @clientlist.setter
     def clientlist(self, windows):
         """ _NET_CLIENT_LIST """
         self._setwindows(windows, '_NET_CLIENT_LIST')
 
+    @clientliststacking.setter
     def clientliststacking(self, windows):
         """ _NET_CLIENT_LIST_STACKING """
         self._setwindows(windows, '_NET_CLIENT_LIST_STACKING')
@@ -83,11 +147,6 @@ class Ewmh:
         for i, w in enumerate(windows):
             cwindows[i] = w.window
         self.display.changeproperty(self.root, propname, xlib.XA.WINDOW, 32, xlib.PropMode.Replace, ctypes.byref(cwindows), lw)
-
-    def activewindow(self, window):
-        """ _NET_ACTIVE_WINDOW """
-        cwin = xlib.Window(window.window)
-        self.display.changeproperty(self.root, '_NET_ACTIVE_WINDOW', xlib.XA.WINDOW, 32, xlib.PropMode.Replace, ctypes.byref(cwin), 1)
 
     def __del__(self):
         self.display.destroywindow(self.window)
