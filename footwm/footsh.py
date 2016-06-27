@@ -1,7 +1,7 @@
 """
 Command line interface for footwm.
 
-Copyright (c) 2016 Jerry Kotland
+Copyright (c) 2016 Akce
 """
 
 import argparse

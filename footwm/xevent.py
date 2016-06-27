@@ -1,7 +1,7 @@
 """
 Simple xevent generator.
 
-Copyright (c) 2016 Jerry Kotland
+Copyright (c) 2016 Akce
 """
 
 from . import log as logger

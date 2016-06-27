@@ -332,6 +332,33 @@ class XDestroyWindowEvent(ctypes.Structure):
             ('window', Window),
             ]
 
+class FocusMode(ctypes.c_int, EnumMixin):
+    NotifyNormal        = 0
+    NotifyGrab          = 1
+    NotifyUngrab        = 2
+    NotifyWhileGrabbed  = 3
+
+class FocusDetail(ctypes.c_int, EnumMixin):
+    NotifyAncestor          = 0
+    NotifyVirtual           = 1
+    NotifyInferior          = 2
+    NotifyNonlinear         = 3
+    NotifyNonlinearVirtual  = 4
+    NotifyPointer           = 5
+    NotifyPointerRoot       = 6
+    NotifyDetailNone        = 7
+
+class XFocusChangeEvent(ctypes.Structure):
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('window', Window),
+            ('mode', FocusMode),
+            ('detail', FocusDetail),
+            ]
+
 class XKeyEvent(ctypes.Structure):
     _fields_ = [
             ('type', ctypes.c_int),
@@ -392,6 +419,7 @@ class XEvent(ctypes.Union):
             ('xconfigure', XConfigureEvent),
             ('xconfigurerequest', XConfigureRequestEvent),
             ('xdestroywindow', XDestroyWindowEvent),
+            ('xfocus', XFocusChangeEvent),
             ('xkey', XKeyEvent),
             ('xmap', XMapEvent),
             ('xmaprequest', XMapRequestEvent),

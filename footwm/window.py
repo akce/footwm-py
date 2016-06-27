@@ -176,6 +176,7 @@ class ClientWindow(BaseWindow):
         self.display.mapwindow(self)
 
     def focus(self):
+        log.debug('0x%08x: focus', self.window)
         msg = 'WM_TAKE_FOCUS'
         try:
             self.clientmessage(msg)

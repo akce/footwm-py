@@ -1,7 +1,7 @@
 """
 FootKeys module.
 
-Copyright (c) 2016 Jerry Kotland
+Copyright (c) 2016 Akce
 """
 
 from . import clientcmd

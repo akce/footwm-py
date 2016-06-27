@@ -65,6 +65,8 @@ class Foot(object):
                 xlib.EventName.ConfigureNotify:     self.handle_configurenotify,
                 xlib.EventName.ConfigureRequest:    self.handle_configurerequest,
                 xlib.EventName.DestroyNotify:       self.handle_destroynotify,
+                xlib.EventName.FocusIn:             self.handle_focusin,
+                xlib.EventName.FocusOut:            self.handle_focusout,
                 xlib.EventName.MapNotify:           self.handle_mapnotify,
                 xlib.EventName.MapRequest:          self.handle_maprequest,
                 xlib.EventName.UnmapNotify:         self.handle_unmapnotify,
@@ -93,14 +95,13 @@ class Foot(object):
                 family = []
         else:
             family = self._movetofront(win=win)
-        for w in reversed(family):
-            w.resize(self.root.geom)
-            w.show()
-            log.debug('0x%08x: showing window=%s', w.window, w)
         # Focus the very top window.
         if family:
+            w = family[0]
+            w.resize(self.root.geom)
+            w.show()
             self.ewmh.activewindow = w
-            w.focus()
+            log.debug('0x%08x: showing window=%s', w.window, w)
         # Hide every window that's not in the family of windows.
         for w in self.stacklist:
             if w not in family:
@@ -195,6 +196,14 @@ class Foot(object):
             except KeyError:
                 log.debug('0x%08x: not found in root %s', e.window, self.root)
             self.show()
+
+    def handle_focusin(self, event):
+        e = event.xfocus
+        log.debug('0x%08x: focusin mode=%s detail=%s', e.window, e.mode, e.detail)
+
+    def handle_focusout(self, event):
+        e = event.xfocus
+        log.debug('0x%08x: focusout mode=%s detail=%s', e.window, e.mode, e.detail)
 
     def handle_mapnotify(self, event):
         # Server has displayed the window.

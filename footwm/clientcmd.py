@@ -1,7 +1,7 @@
 """
 Client window commands.
 
-Copyright (c) 2016 Jerry Kotland
+Copyright (c) 2016 Akce
 """
 
 import types

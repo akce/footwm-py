@@ -15,7 +15,7 @@ This gives a visual indication for the hierarchy of command line options.
 ... args = parser.parse_args()
 ... args.subcommand()
 
-Copyright (c) 2014-2016 Jerry Kotland
+Copyright (c) 2014-2016 Akce
 """
 
 class NestedSubparser(object):
