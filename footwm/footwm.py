@@ -233,14 +233,15 @@ class Foot(object):
         except KeyError:
             log.error('0x%08x: MapRequest for unknown window!!!', w)
         else:
-            # Put window to the top of the list and update display.
-            if win not in self.stacklist:
-                i = 0
-                self.stacklist.insert(i, win)
-            win.manage(xlib.InputEventMask.StructureNotify)
-            self.show(win=win)
-            self.ewmh.clientlist = self.clientlist
-            self.ewmh.clientliststacking = self.stacklist
+            if not win.override_redirect:
+                # Put window to the top of the list and update display.
+                if win not in self.stacklist:
+                    i = 0
+                    self.stacklist.insert(i, win)
+                win.manage(xlib.InputEventMask.EnterWindow | xlib.InputEventMask.FocusChange | xlib.InputEventMask.StructureNotify)
+                self.show(win=win)
+                self.ewmh.clientlist = self.clientlist
+                self.ewmh.clientliststacking = self.stacklist
 
     def handle_unmapnotify(self, event):
         e = event.xunmap
