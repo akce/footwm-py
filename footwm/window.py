@@ -47,26 +47,57 @@ log = xlog.make(name=__name__)
 class WindowError(Exception):
     pass
 
-class Geometry(object):
+def centregeom(geom, availablegeom):
+    """ A new geometry such that the x,y coords centre the geom.width/height in the availablegeom. """
+    # XXX TODO
+    return geom
 
-    def __init__(self, xwinattr):
-        self.x = xwinattr.x
-        self.y = xwinattr.y
-        self.w = xwinattr.width
-        self.h = xwinattr.height
+def fixedgeom(currentgeom, availablegeom, sizehints):
+    try:
+        mingeom = sizehints.mingeom
+        maxgeom = sizehints.maxgeom
+    except AttributeError:
+        geom = None
+    else:
+        if mingeom == maxgeom:
+            geom = mingeom
+        else:
+            geom = None
+    return geom
 
-    def __eq__(self, other):
-        return self.x == other.x and self.y == other.y and self.w == other.w and self.h == other.h
+def honourablemaxsizer(currentgeom, availablegeom, sizehints):
+    """ Honourable max sizer tries to maximise the window but honours sizehints while doing it. """
+    size = None
+    if sizehints.flags.value == xlib.SizeFlags.PSize:
+        # Seems to be set when the window is already at the correct size.
+        size = centregeom(currentgeom, availablegeom)
+    if size is None:
+        # Check for windows that can't be resized, ie, min == max.
+        size = fixedgeom(currentgeom, availablegeom, sizehints)
+    if size is None:
+        # For now, we just set to the whole available geometry.
+        # TODO implement aspect, size increments, and respect for min/max constraints.
+        size = availablegeom
+    return size
 
-    def __str__(self):
-        return '{}(x={}, y={}, w={}, h={})'.format(self.__class__.__name__, self.x, self.y, self.w, self.h)
+def brutalmaxsizer(currentgeom, availablegeom, sizehints):
+    """ Brutal maxsizer sets the geometry to the maximum available space, irrespective of sizehints. """
+    return availablegeom
+
+def transientsizer(currentgeom, availablegeom, sizehints):
+    """ Transient sizer centres position in the available geometry but width/height are unchanged from sizehints. """
+    # TODO just return as honourable max sizer.
+    return honourablemaxsizer(currentgeom, availablegeom, sizehints)
 
 class BaseWindow(object):
 
     def __init__(self, display, window):
         self.display = display
         self.window = window
-        self._load_window_attr()
+        try:
+            self.override_redirect, self.geom, self.map_state = self.display.getwindowattributes(self.window)
+        except (TypeError, ValueError) as e:
+            raise WindowError('0x%08x: getwindowattributes failed %s', self.window.window, e)
         self.name = self.wm_name
 
     def manage(self, eventmask):
@@ -77,17 +108,6 @@ class BaseWindow(object):
     def wm_name(self):
         #log.debug('0x%08x: Get WM_NAME name=%s status=%d', self.window, name)
         return self.display.getwmname(self)
-
-    def _load_window_attr(self):
-        wa = self.display.getwindowattributes(self)
-        if wa:
-            # Extract the parts of XWindowAttributes that we need.
-            self.override_redirect = wa.override_redirect
-            self.geom = Geometry(wa)
-            self.map_state = wa.map_state.value
-            log.debug('0x%08x: windowattr=%s', self.window, wa)
-        else:
-            log.debug('0x%08x: XGetWindowAttributes failed', self.window)
 
     def __str__(self):
         args = [
@@ -117,6 +137,11 @@ class BaseWindow(object):
         try:
             if self.transientfor:
                 args.append('transientfor=0x{:08x}'.format(self.transientfor.window))
+        except AttributeError:
+            pass
+        try:
+            if self.sizehints:
+                args.append('sizehints={}'.format(self.sizehints))
         except AttributeError:
             pass
         try:
@@ -161,11 +186,13 @@ class RootWindow(BaseWindow):
 
 class ClientWindow(BaseWindow):
 
-    def __init__(self, display, window):
+    def __init__(self, display, window, sizer):
         super().__init__(display, window)
+        self.sizer = sizer
         self.wantedgeom = self.geom
         wm_state = self.wm_state
         self.res_name, self.res_class = self.wm_class
+        self.sizehints = self.display.getwmnormalhints(self)
         # The family of windows for a normal client window is only itself.
         self.family = [self]
 
@@ -240,20 +267,24 @@ class ClientWindow(BaseWindow):
         log.debug('0x%08x: Set WM_STATE state=%s', self.window, xlib.WmStateState(winstate))
         self.display.setwmstate(self, winstate)
 
-    def resize(self, geom):
+    def resize(self, availablegeom):
+        """ resize the window given the available geometry area.
+        """
         # Actual geom will be set in the configure notify handler.
-        self.wantedgeom = geom
+        self.wantedgeom = self.sizer(self.geom, availablegeom, self.sizehints)
         if self.wantedgeom != self.geom:
             log.debug('0x%08x: attempt resize %s -> %s', self.window, self.geom, self.wantedgeom)
             self.display.moveresizewindow(self, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
 
 class NormalWindow(ClientWindow):
-    pass
+
+    def __init__(self, display, window, sizer=honourablemaxsizer):
+        super().__init__(display, window, sizer)
 
 class TransientWindow(ClientWindow):
 
     def __init__(self, display, window, transientfor):
-        super().__init__(display, window)
+        super().__init__(display, window, transientsizer)
         self.transientfor = transientfor
         # The family of windows for a transient includes the parent, and potentially, that parents parents etc..
         try:
@@ -263,19 +294,3 @@ class TransientWindow(ClientWindow):
             # Xwindows seems to be a land where anything goes!
             # Set the family like a normal window but we'll still draw like a transient.
             self.family = [self]
-
-    @property
-    def wantedgeom(self):
-        return self._wantedgeom
-
-    @wantedgeom.setter
-    def wantedgeom(self, geom):
-        # Ignores width/height changes.
-        try:
-            self._wantedgeom.x = geom.x
-        except AttributeError:
-            # If this is the first time we've tried to set, then accept the geometry.
-            self._wantedgeom = geom
-        else:
-            # XXX Maybe we should always put in the middle of geom?
-            self._wantedgeom.y = geom.y

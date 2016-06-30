@@ -5,10 +5,14 @@ Display abstracts away most of the direct access to the xlib library.
 
 Copyright (c) 2016 Akce
 """
+import collections
 import ctypes
 
 from . import keydefs
 from . import xlib
+
+# For when a Geometry is manually created.
+Geomtuple = collections.namedtuple('Geomtuple', ['x', 'y', 'width', 'height'])
 
 # addr = address-of, this is a handy shortcut for using ctypes.
 addr = ctypes.byref
@@ -46,6 +50,54 @@ class KeySym:
     def __repr__(self):
         """ pprint uses repr to print, so make this nice for our text output. """
         return str(self)
+
+class Geometry(object):
+
+    def __init__(self, xwinattr):
+        self.x = xwinattr.x
+        self.y = xwinattr.y
+        self.w = xwinattr.width
+        self.h = xwinattr.height
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y and self.w == other.w and self.h == other.h
+
+    def __str__(self):
+        return '{}(x={}, y={}, w={}, h={})'.format(self.__class__.__name__, self.x, self.y, self.w, self.h)
+
+class SizeHints:
+
+    def __init__(self, csizehints):
+        """ Take the xlib/ctypes csizehints data structure and convert to our own use.
+        See ICCCM 4.1.2.3 WM_NORMAL_HINTS Property for info on csizehints. """
+        self.flags = xlib.SizeFlags(csizehints.flags.value)
+        if self.flags.value & (xlib.SizeFlags.USPosition | xlib.SizeFlags.USSize):
+            # User specified position & size is not supported yet.
+            pass
+        elif self.flags.value & (xlib.SizeFlags.PPosition | xlib.SizeFlags.PSize):
+            # Program specified size.
+            # I've seen windows that shouldn't be resized with this flag. They set the (obsoleted!) width & height attributes..
+            # PSize seems to be set once the window has been sized to what the wm sets it too. ie, nothing further need be done.
+            pass
+        if self.flags.value & xlib.SizeFlags.PBaseSize:
+            # Check base size first, it's used in preference to min-size.
+            self.mingeom = Geometry(Geomtuple(0, 0, csizehints.base_width, csizehints.base_height))
+        elif self.flags.value & xlib.SizeFlags.PMinSize:
+            self.mingeom = Geometry(Geomtuple(0, 0, csizehints.min_width, csizehints.min_height))
+        if self.flags.value & xlib.SizeFlags.PMaxSize:
+            self.maxgeom = Geometry(Geomtuple(0, 0, csizehints.max_width, csizehints.max_height))
+        if self.flags.value & xlib.SizeFlags.PResizeInc:
+            self.widthinc = csizehints.width_inc
+            self.heightinc = csizehints.height_inc
+        if self.flags.value & xlib.SizeFlags.PAspect:
+            # TODO Unsupported.
+            pass
+        if self.flags.value & xlib.SizeFlags.PWinGravity:
+            # TODO Unsupported.
+            pass
+
+    def __str__(self):
+        return '{}({})'.format(self.__class__.__name__, 'flags={}'.format(str(self.flags)))
 
 class Display:
 
@@ -182,13 +234,19 @@ class Display:
                 protocols[aname] = aid
         return protocols
 
-    def getwindowattributes(self, window):
+    def getwindowattributes(self, windowid):
         wa = xlib.XWindowAttributes()
-        astatus = xlib.xlib.XGetWindowAttributes(self.xh, window.window, ctypes.byref(wa))
+        astatus = xlib.xlib.XGetWindowAttributes(self.xh, windowid, ctypes.byref(wa))
         if astatus > 0:
             # XGetWindowAttr completed successfully.
-            ret = wa
+            # Extract the parts of XWindowAttributes that we need.
+            override_redirect = wa.override_redirect
+            geom = Geometry(wa)
+            map_state = wa.map_state.value
+            #log.debug('0x%08x: windowattr=%s', self.window, wa)
+            ret = override_redirect, geom, map_state
         else:
+            #log.debug('0x%08x: XGetWindowAttributes failed', self.window)
             ret = None
         return ret
 
@@ -205,6 +263,18 @@ class Display:
                     pass
                 self.free(xtp.value)
         return name
+
+    def getwmnormalhints(self, win):
+        # Use XAllocSizeHints as the size hints structure may change (but not likely), but must be free'd.
+        cpsizehints = xlib.xlib.XAllocSizeHints(None)
+        lret = ctypes.c_long()
+        status = xlib.xlib.XGetWMNormalHints(self.xh, win.window, cpsizehints, addr(lret))
+        if status != 0:
+            hints = SizeHints(cpsizehints.contents)
+            self.free(cpsizehints)
+        else:
+            hints = None
+        return hints
 
     def getwmstate(self, window):
         state = None

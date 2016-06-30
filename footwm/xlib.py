@@ -74,6 +74,7 @@ window_p = ctypes.POINTER(Window)
 Bool = ctypes.c_bool
 
 byte_p = ctypes.POINTER(ctypes.c_ubyte)
+long_p = ctypes.POINTER(ctypes.c_long)
 ulong_p = ctypes.POINTER(ctypes.c_ulong)
 int_p = ctypes.POINTER(ctypes.c_int)
 char_p = ctypes.POINTER(ctypes.c_char)
@@ -737,3 +738,57 @@ xlib.XUngrabKey.argtypes = display_p, KeyCode, GrabKeyModifierMask, Window
 # char *XKeysymToString(KeySym keysym);
 #xlib.XKeysymToString.restype = char_p
 #xlib.XKeysymToString.argtypes = KeySym,
+
+# See Xutil.h
+class SizeFlags(ctypes.c_long, metaclass=BitmapMetaMaker(ctypes.c_long)):
+    _bits_ = [
+            ('USPosition',  (1 << 0)),
+            ('USSize',      (1 << 1)),
+            ('PPosition',   (1 << 2)),
+            ('PSize',       (1 << 3)),
+            ('PMinSize',    (1 << 4)),
+            ('PMaxSize',    (1 << 5)),
+            ('PResizeInc',  (1 << 6)),
+            ('PAspect',     (1 << 7)),
+            ('PBaseSize',   (1 << 8)),
+            ('PWinGravity', (1 << 9)),
+            ]
+
+class SizeHints(ctypes.Structure):
+    class Aspect(ctypes.Structure):
+        _fields_= [
+                ('x', ctypes.c_int),
+                ('y', ctypes.c_int),
+                ]
+        def __str__(self):
+            return '{}({})'.format(self.__class__.__name__, ' '.join('{}={}'.format(name, str(getattr(self, name))) for name, _ in self._fields_))
+    _fields_ = [
+            ('flags', SizeFlags),
+            ('x', ctypes.c_int),
+            ('y', ctypes.c_int),
+            ('width', ctypes.c_int),
+            ('height', ctypes.c_int),
+            ('min_width', ctypes.c_int),
+            ('min_height', ctypes.c_int),
+            ('max_width', ctypes.c_int),
+            ('max_height', ctypes.c_int),
+            ('width_inc', ctypes.c_int),
+            ('height_inc', ctypes.c_int),
+            ('min_aspect', Aspect),
+            ('max_aspect', Aspect),
+            ('base_width', ctypes.c_int),
+            ('base_height', ctypes.c_int),
+            ('win_gravity', ctypes.c_int),
+            ]
+    def __str__(self):
+        return '{}({})'.format(self.__class__.__name__, ' '.join('{}={}'.format(name, str(getattr(self, name))) for name, _ in self._fields_))
+
+sizehints_p = ctypes.POINTER(SizeHints)
+
+# XSizeHints *XAllocSizeHints(void);
+xlib.XAllocSizeHints.restype = sizehints_p
+xlib.XAllocSizeHints.argtypes = ctypes.c_void_p,
+
+# Status XGetWMNormalHints(Display *display, Window w, XSizeHints *hints_return, long *supplied_return);
+xlib.XGetWMNormalHints.restype = Status
+xlib.XGetWMNormalHints.argtypes = display_p, Window, sizehints_p, long_p

@@ -11,7 +11,7 @@ import logging
 import footwm.xlib as xlib
 from . import display
 from . import ewmh
-from . import window as xwin
+from . import window
 from . import xevent
 import footwm.log
 
@@ -24,7 +24,7 @@ class Foot(object):
         self.display = display.Display(displayname)
         log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
         # TODO: worry about screens, displays, xrandr and xinerama!
-        self.root = xwin.RootWindow(self.display, self.display.defaultrootwindow)
+        self.root = window.RootWindow(self.display, self.display.defaultrootwindow)
         eventmask = xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify
         self.display.install(self.root, eventmask)
         # We are now the window manager - continue install.
@@ -142,7 +142,7 @@ class Foot(object):
         e = event.xconfigure
         # Only handle if the notify event not caused by a sub-structure redirect.
         if e.event == e.window:
-            geom = xwin.Geometry(e)
+            geom = display.Geometry(e)
             log.debug('0x%08x: ConfigureNotify %s', e.window, geom)
             try:
                 window = self.root.children[e.window]
@@ -164,7 +164,7 @@ class Foot(object):
         # Most clients get slow and behave weird if they don't get their way, so we'll honour all
         # requests but we'll request the dimensions we want in the callback configure notify handler.
         e = event.xconfigurerequest
-        geom = xwin.Geometry(e)
+        geom = display.Geometry(e)
         log.debug('0x%08x: ConfigureRequest parent=0x%08x %s %s', e.window, e.parent, geom, e.value_mask)
         wc = xlib.XWindowChanges()
         changemask = 0
@@ -181,7 +181,7 @@ class Foot(object):
             changemask |= e.value_mask.CWHeight
             wc.height = e.height
         # Grant requested geom.
-        requestedgeom = xwin.Geometry(wc)
+        requestedgeom = display.Geometry(wc)
         log.debug('0x%08x: requested %s %s', e.window, xlib.ConfigureWindowStructure(changemask), requestedgeom)
         self.display.configurewindow(e.window, changemask, wc)
 
