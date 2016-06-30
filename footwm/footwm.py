@@ -113,7 +113,11 @@ class Foot(object):
 
     def handle_clientmessage(self, event):
         e = event.xclient
-        log.debug('handle_clientmessage')
+        try:
+            msg = self.display.atom[e.message_type]
+        except KeyError:
+            msg = self.display.getatomname(e.message_type)
+        log.debug('0x%08x: handle_clientmessage msgid=%d name=%s', e.window, e.message_type, msg)
         if e.message_type == self.display.atom['_NET_ACTIVE_WINDOW']:
             log.debug('0x%08x: _NET_ACTIVE_WINDOW', e.window)
             try:
