@@ -187,7 +187,8 @@ class Foot(object):
         # Grant requested geom.
         requestedgeom = display.Geometry(wc)
         log.debug('0x%08x: requested %s %s', e.window, xlib.ConfigureWindowStructure(changemask), requestedgeom)
-        self.display.configurewindow(e.window, changemask, wc)
+        if changemask:
+            self.display.configurewindow(e.window, changemask, wc)
 
     def handle_destroynotify(self, event):
         # Window has been destroyed.
