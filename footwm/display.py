@@ -125,6 +125,9 @@ class Display:
     def add_atom(self, symbol, only_if_exists=False):
         self.atom[symbol] = xlib.xlib.XInternAtom(self.xh, bytes(symbol, 'utf8'), only_if_exists)
 
+    def allowevents(self, aevents, time=xlib.CurrentTime):
+        return xlib.xlib.XAllowEvents(self.xh, aevents, time)
+
     def changeproperty(self, window, propertyname, type_, format_, mode, data, nelements):
         try:
             w = window.window

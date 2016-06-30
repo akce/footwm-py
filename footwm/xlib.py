@@ -792,3 +792,16 @@ xlib.XAllocSizeHints.argtypes = ctypes.c_void_p,
 # Status XGetWMNormalHints(Display *display, Window w, XSizeHints *hints_return, long *supplied_return);
 xlib.XGetWMNormalHints.restype = Status
 xlib.XGetWMNormalHints.argtypes = display_p, Window, sizehints_p, long_p
+
+class AllowEvents(ctypes.c_int, EnumMixin):
+    AsyncPointer    = 0
+    SyncPointer     = 1
+    ReplayPointer   = 2
+    AsyncKeyboard   = 3
+    SyncKeyboard    = 4
+    ReplayKeyboard  = 5
+    AsyncBoth       = 6
+    SyncBoth        = 7
+
+# int XAllowEvents(Display *display, int event_mode, Time time);
+xlib.XAllowEvents.argtypes = display_p, AllowEvents, Time
