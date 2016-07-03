@@ -6,6 +6,7 @@ Copyright (c) 2016 Akce
 
 # Python standard modules.
 import logging
+import sys
 
 # Local modules.
 import footwm.xlib as xlib
@@ -15,8 +16,7 @@ from . import window
 from . import xevent
 import footwm.log
 
-log = footwm.log.make(handler=logging.FileHandler('debug.log'))
-log.addHandler(logging.StreamHandler())
+log = footwm.log.make(name=__name__)
 
 class Foot(object):
 
@@ -299,7 +299,35 @@ def managewindowp(window):
         manage = False
     return manage
 
+def configlogging(logspec, outfilename=None):
+    # Configure a filehandler if given an outfilename.
+    if outfilename:
+        h = logging.FileHandler(outfilename)
+    else:
+        h = logging.StreamHandler()
+    mods = logspec.split(',')
+    for m in mods:
+        try:
+            mod, lvlname = m.split(':')
+        except ValueError:
+            mod = m
+            # Default to INFO level logging if the module is present.
+            lvlname = 'info'
+        lvl = getattr(logging, lvlname.upper())
+        logger = footwm.log.make(name=mod, level=lvl, handler=h)
+        module = sys.modules[mod]
+        setattr(module, 'log', logger)
+
+def parseargs():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--logspec', help='comma separated list of module:loglevel specifiers. eg, display:debug,ewmh:info')
+    parser.add_argument('--outfile', help='Write log messages to this file. Default: stdout')
+    args = parser.parse_args()
+    configlogging(args.logspec, args.outfile)
+
 def main():
+    parseargs()
     try:
         foot = Foot()
     except Exception as e:
