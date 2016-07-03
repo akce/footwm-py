@@ -2,5 +2,5 @@ export PYTHONPATH=.
 
 k
 ./bin/footkeys &
-./bin/footwm &
+./bin/footwm --outfile test.log --logspec footwm.footwm:debug,footwm.window:debug &
 xterm
