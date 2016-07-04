@@ -1,0 +1,13 @@
+#! /usr/bin/env python3
+"""
+Footwm app runner script.
+
+Foot app runner script runs apps and reads return codes avoiding zombie
+processes.
+
+Copyright (c) 2016 Akce
+"""
+
+from footwm import footrun
+
+footrun.main()
