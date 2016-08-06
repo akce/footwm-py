@@ -5,7 +5,7 @@ Copyright (c) 2014-2016 Akce
 """
 # Python standard modules.
 import errno
-import select
+import select as selectmod
 import socket
 import time
 
@@ -39,18 +39,18 @@ class StreamServer(object):
         return self.connected
 
     def close(self):
-        self._socket.shutdown(socket.SHUT_RDWR)
         log.debug('closing server socket {}', self._socket)
+        self._socket.shutdown(socket.SHUT_RDWR)
         self._socket.close()
         self.connected = False
         return True
 
     def fileno(self):
-        """ Implement for select.select. """
+        """ Implement for selectmod.select. """
         return self._socket.fileno()
 
     def handle_recv(self):
-        """ Accep a new client connection. """
+        """ Accept a new client connection. """
         conn, addr = self._socket.accept()
         log.debug("Accept conn: %s", str(addr))
         self._newconn(conn)
@@ -64,7 +64,7 @@ class ClientMixin(object):
         self._chunk = ''
 
     def fileno(self):
-        """ Implement for select.select. """
+        """ Implement for selectmod.select. """
         return self._socket.fileno()
 
     def close(self):
@@ -108,7 +108,8 @@ class ClientMixin(object):
                     self._chunk = x[-1]
             for m in msgs:
                 #log.debug('received %s', m)
-                self._receiver.handle_message(m)
+                self._receiver.decode_msg_and_call(m)
+                # TODO encode result and post back to caller.
             ret = True
         else:
             ret = False
@@ -118,12 +119,20 @@ class ClientMixin(object):
         """ post a message, don't wait for a response. """
         self._socket.sendall(bytes(msg + self._terminal, 'utf-8'))
 
+class NullReceiver:
+
+    def decode_msg_and_call(self, msg):
+        pass
+
+    def disconnected(self, client):
+        pass
+
 class StreamClient(ClientMixin):
     """ Stream client class interfaces with the select loop, and handles message re-assembly and sending. """
 
     def __init__(self, address=None, family=socket.AF_INET, receiver=None, terminal='\n\n\n'):
         """ Provide either a connected socket (s) or address/family. """
-        super().__init__(receiver, terminal)
+        super().__init__(receiver or NullReceiver(), terminal)
         self._address = address or ('localhost', 5555)
         self._family = family
         self.retry_connect = 5  # seconds
@@ -151,6 +160,21 @@ class StreamRemote(ClientMixin):
         self._socket = sock
         # For now assume the socket is connected.
         self.connected = True
+
+def _eintr_retry(func, *args):
+    """restart a system call interrupted by EINTR"""
+    while True:
+        try:
+            return func(*args)
+        except OSError as e:
+            if e.errno != errno.EINTR:
+                raise
+
+def select(reads=None, writes=None, timeout=None):
+    rs = reads or []
+    ws = writes or []
+    es = rs + ws
+    return _eintr_retry(selectmod.select, rs, ws, es, timeout)
 
 class EventLoop(object):
 
@@ -181,34 +205,31 @@ class EventLoop(object):
             else:
                 self._deadclients[client] = time.time() + t
 
-    @staticmethod
-    def _eintr_retry(func, *args):
-        """restart a system call interrupted by EINTR"""
-        while True:
+    def _do_input(self, timeout=None):
+        t = timeout or self._select_timeout
+        readable, _, exceptional = select(reads=self.inputs, timeout=t)
+        for r in readable:
             try:
-                return func(*args)
-            except OSError as e:
-                if e.errno != errno.EINTR:
-                    raise
+                success = r.handle_recv()
+            except socket.error as e:
+                success = False
+            if success is False:
+                log.debug('_do_input success is false, removing')
+                self._remove(r)
+        for sock in exceptional:
+            if sock in self.inputs:
+                log.debug('remove exceptional socket')
+                self._remove(sock)
 
     def serve_forever(self):
-        # XXX Maybe use a thread.Signal instead of True?
         # if we have deadclients, then we want to try and connect them straight away.
         if self._deadclients:
             self._select_timeout = 0
         # End the loop if there are no clients left...
+        # XXX Maybe use a thread.Signal instead?
         while self.inputs or self._deadclients:
             log.debug('select.timeout=%s inputs=%s deadclients=%s', self._select_timeout, len(self.inputs), len(self._deadclients.keys()))
-            readable, _, exceptional = EventLoop._eintr_retry(select.select, self.inputs, [], self.inputs, self._select_timeout)
-            for r in readable:
-                try:
-                    success = r.handle_recv()
-                except socket.error as e:
-                    success = False
-                if success is False:
-                    self._remove(r)
-            for sock in exceptional:
-                self._remove(sock)
+            self._do_input()
             self._connect_deadclients()
             self._reset_select_timeout()
         log.debug('Exiting the main loop, no inputs or deadclients!')
@@ -252,10 +273,14 @@ class EventLoop(object):
 
     def _remove(self, sock):
         log.debug('_remove %s', sock)
-        self.inputs.remove(sock)
         sock.close()
-        # Add client for re-connect attempts.
-        self.add_client(sock)
+        try:
+            self.inputs.remove(sock)
+        except ValueError:
+            pass
+        else:
+            # Add client for re-connect attempts.
+            self.add_client(sock)
 
     def shutdown(self):
         for x in self.inputs:

@@ -17,24 +17,31 @@ def encode_command(cmd, *args, **kwargs):
     s = json.dumps(d)
     return s
 
-def make_encode_and_post(funcname):
+def make_encode_and_post(funcname, postfunc):
     def encode_and_post(self, *args, **kwargs):
         d = encode_command(funcname, *args, **kwargs)
-        self.post(d)
+        postfunc(d)
     return encode_and_post
 
-class JsonClient(object):
-    """
-    Client interface that encodes/decodes over a socket using JSON.
-    Decode JSON messages from the remote object for self.local object.
-    Encode commands for public methods of self.remote in JSON and send.
-    """
-    def __init__(self, cloneclass):
-        # Clone the public interface of cloneclass.
-        public = [x for x in dir(cloneclass) if x[0] != '_']
-        for f in public:
-            eap = make_encode_and_post(f)
-            setattr(self, f, functools.partial(eap, self))
+def publicmethodnames(obj):
+    """ Return a list of public method names for obj(ect). Public methods are
+    those that do NOT start with an underscore '_' character. """
+    return [x for x in dir(obj) if x[0] != '_']
+
+class RemoteObject:
+    """ Clone a remote object for JSON RPC. Method calls to this object will be
+    converted to JSON and posted via the postfunc. """
+
+    def __init__(self, funcnames, postfunc):
+        """ Create method call functions from funcnames that call to the post function. """
+        for f in funcnames:
+            setattr(self, f, functools.partial(make_encode_and_post(f, postfunc), self))
+
+class LocalObject:
+    """ Receive JSON RPC method invocations and pass on to obj(ect). """
+
+    def __init__(self, obj):
+        self._obj = obj
 
     def decode_msg_and_call(self, msg):
         """
@@ -51,7 +58,7 @@ class JsonClient(object):
         else:
             try:
                 cmdname = cmddict['cmd']
-                method = getattr(self.local, cmdname)
+                method = getattr(self._obj, cmdname)
             except KeyError:
                 # XXX cmd not defined.
                 # XXX log something here...
