@@ -7,6 +7,10 @@ Copyright (c) 2016 Akce
 import functools
 import json
 
+from . import log as loghelp
+
+log = loghelp.make(name=__name__)
+
 def encode_command(cmd, *args, **kwargs):
     """ Encode python function call to our JSON RPC format. """
     d = {
@@ -53,19 +57,16 @@ class LocalObject:
             cmddict = json.loads(msg)
         except ValueError as e:
             # Problem converting msg to json struct.
-            # XXX log this.
-            pass
+            log.warn('Could not convert from JSON. data="%s"', msg)
         else:
             try:
                 cmdname = cmddict['cmd']
                 method = getattr(self._obj, cmdname)
             except KeyError:
-                # XXX cmd not defined.
-                # XXX log something here...
-                pass
+                # cmd not defined.
+                log.warn("'cmd' key not in JSON cmddict %s", str(list(cmddict.keys())))
             except AttributeError:
-                # XXX log something here...
-                pass
+                log.warn('method %s not found in object', cmdname)
             else:
                 # XXX should args default to [] and kwargs default to {}?
                 args = cmddict.get('args', None)
