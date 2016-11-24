@@ -7,6 +7,7 @@ Copyright (c) 2016 Akce
 import functools
 import itertools
 import operator
+import os
 
 # Local modules.
 from . import display
@@ -168,9 +169,35 @@ class FootKeys:
 def nullop(*args, **kwargs):
     print('XXX')
 
+def getconfigfilename(args):
+    cf = None
+    try:
+        if args.configfile:
+            cf = args.configfile
+    except AttributeError:
+        pass
+    if cf is None:
+        # Test if there's config file in the home directory.
+        name = 'footkeysconfig.py'
+        homefile = os.path.join(os.environ['HOME'], ".{}".format(name))
+        if os.path.isfile(homefile):
+            cf = homefile
+        else:
+            # Fallback to the sample config footkeysconfig.py in the source directory.
+            cf = os.path.join(os.path.split(os.path.realpath(__file__))[0], name)
+    return cf
+
+def loadconfig(filename, globals_=None, locals_=None):
+    gs = globals() if globals_ is None else globals_
+    ls = locals() if locals_ is None else locals_
+    with open(filename) as f:
+        codeobj = compile(f.read(), filename, 'exec')
+        exec(codeobj, gs, ls)
+
 def parseargs():
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--configfile', help='Full path to configuration file. default: %(default)s')
     parser.add_argument('--display', help='X display name. eg, :0.1. default: %(default)s')
     args = parser.parse_args()
     return args
@@ -179,13 +206,8 @@ def main():
     args = parseargs()
     fk = FootKeys(args.display)
     # TODO load settings from config file or use defaults.
-    with fk.config() as f:
-        # Require scroll-lock for all our keys and always ignore caps-lock and numlock.
-        capslock = xlib.KeyModifierMask.Lock
-        numlock = xlib.KeyModifierMask.Mod2
-        scrolllock = xlib.KeyModifierMask.Mod3
-        f.setmodifiers(requiremods=[scrolllock], ignoremods=[capslock, numlock])
-        f.addkey('F5', nullop)
+    with fk.config() as fconfig:
+        loadconfig(getconfigfilename(args), globals(), locals())
     try:
         xevent.run(fk.display, fk.eventhandlers)
     finally:
