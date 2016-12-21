@@ -6,6 +6,7 @@ Copyright (c) 2016 Akce
 
 import argparse
 
+from . import clientcmd
 from . import display
 from . import ewmh
 from . import log as logger
@@ -17,45 +18,25 @@ log = logger.make(name=__name__)
 class FootShell:
 
     def __init__(self, displayname=None):
-        self.display = display.Display(displayname)
-        log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
-        self.root = window.RootWindow(self.display, self.display.defaultrootwindow)
-        self.ewmh = ewmh.EwmhClient(self.display, self.root)
+        d = display.Display(displayname)
+        log.debug('%s: connect display=%s', self.__class__.__name__, d)
+        root = window.RootWindow(d, d.defaultrootwindow)
+        e = ewmh.EwmhClient(d, root)
+        self.client = clientcmd.ClientCommand(d, root, e)
 
     def activate(self, args):
         """ Activate, bring to front, the window. """
-        # XXX Integrate with clientcmd.activatewindow!
-        win = self._getwindow(args)
-        if win:
-            print('activate {}'.format(win))
-            self.ewmh.clientmessage('_NET_ACTIVE_WINDOW', win)
+        self.client.activatewindow(window=args.window, index=args.index, stacking=args.created)
 
     def close(self, args):
         """ Close, delete, the window. """
-        win = self._getwindow(args)
-        if win:
-            # Send a WM_DELETE_WINDOW to the window.
-            win.delete()
+        self.client.closewindow(window=args.window, index=args.index, stacking=args.created)
 
     def ls(self, args):
         """ List windows. """
-        wins = self._getwindowlist(args)
+        wins = self.client.getwindowlist(stacking=args.created)
         for i, win in enumerate(wins):
             print('{: 2d} "{}"'.format(i, win.name))
-
-    def _getwindowlist(self, args):
-        """ Return window list selected by args. """
-        if args.created:
-            wins = self.ewmh.clientlist
-        else:
-            wins = self.ewmh.clientliststacking
-        return wins
-
-    def _getwindow(self, args):
-        """ Return window selected by args. """
-        wins = self._getwindowlist(args)
-        win = wins[args.number]
-        return win
 
 def make_argparser(footsh):
     winparser = argparse.ArgumentParser(add_help=False)
