@@ -6,7 +6,10 @@ Copyright (c) 2016 Akce
 
 import types
 
+from . import display
+from . import ewmh
 from . import log as logger
+from . import window
 
 log = logger.make(name=__name__)
 
@@ -47,3 +50,12 @@ class ClientCommand:
             # internal error!
             win = None
         return win
+
+class ClientInitMixin:
+    """ Common client init. """
+
+    def __init__(self, displayname=None):
+        self.display = display.Display(displayname)
+        log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
+        self.root = window.RootWindow(self.display, self.display.defaultrootwindow)
+        self.ewmh = ewmh.EwmhClient(self.display, self.root)

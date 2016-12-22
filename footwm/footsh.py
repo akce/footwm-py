@@ -7,22 +7,16 @@ Copyright (c) 2016 Akce
 import argparse
 
 from . import clientcmd
-from . import display
-from . import ewmh
 from . import log as logger
 from . import nestedarg
-from . import window
 
 log = logger.make(name=__name__)
 
-class FootShell:
+class FootShell(clientcmd.ClientInitMixin):
 
     def __init__(self, displayname=None):
-        d = display.Display(displayname)
-        log.debug('%s: connect display=%s', self.__class__.__name__, d)
-        root = window.RootWindow(d, d.defaultrootwindow)
-        e = ewmh.EwmhClient(d, root)
-        self.client = clientcmd.ClientCommand(d, root, e)
+        super().__init__(displayname=displayname)
+        self.client = clientcmd.ClientCommand(self.display, self.root, self.ewmh)
 
     def activate(self, args):
         """ Activate, bring to front, the window. """

@@ -10,11 +10,9 @@ import operator
 import os
 
 # Local modules.
-from . import display
-from . import ewmh
+from . import clientcmd
 from . import log as logger
 from . import kb
-from . import window
 from . import xevent
 from . import xlib
 
@@ -81,7 +79,7 @@ class KeyBuilder:
             # No exception occurred, install the keymap.
             self.footkeys._install(self._keysymactions, requiremods=self._requiremods, ignoremods=self._ignoremods)
 
-class FootKeys:
+class FootKeys(clientcmd.ClientInitMixin):
 
     def __init__(self, displayname=None):
         """
@@ -90,10 +88,7 @@ class FootKeys:
         All requiremods values must all be applied for a key in this keymap to match.
         All ignoremods values are all masked out and ignored in keypress events.
         """
-        self.display = display.Display(displayname)
-        log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
-        self.root = window.RootWindow(self.display, self.display.defaultrootwindow)
-        self.ewmh = ewmh.EwmhClient(self.display, self.root)
+        super().__init__(displayname=displayname)
         self._makehandlers()
 
     def _makehandlers(self):
