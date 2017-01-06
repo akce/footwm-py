@@ -153,7 +153,7 @@ class FootKeys(clientcmd.ClientInitMixin):
         keycombo = (e.keycode, e.state.value)
         if keycombo in self._keycodeactions:
             keyaction = self._keycodeactions[keycombo]
-            keyaction.action.action(keyargs=(self, keycombo, keyaction.action))
+            keyaction.action.action()
         else:
             log.error('0x%08x: no action defined for (keycode, modifier) %s', e.window, keycombo)
 
@@ -201,8 +201,13 @@ def main():
     args = parseargs()
     fk = FootKeys(args.display)
     # TODO load settings from config file or use defaults.
-    with fk.config() as fconfig:
-        loadconfig(getconfigfilename(args), globals(), locals())
+    with fk.config() as keyconfig:
+        # Create a client object and add it into the configs
+        # namespace. One of these is handy and would be used by every
+        # config.
+        gl = globals().copy()
+        gl['client'] = clientcmd.ClientCommand(fk.display, fk.root, fk.ewmh)
+        loadconfig(getconfigfilename(args), gl, locals())
     try:
         xevent.run(fk.display, fk.eventhandlers)
     finally:
