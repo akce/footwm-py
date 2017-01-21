@@ -5,26 +5,14 @@ Copyright (c) 2016 Akce
 """
 # Python standard modules.
 import shlex
+import signal
 import subprocess
-import threading
 
 # Local modules.
-from . import log as loghelp
-
-log = loghelp.make(name=__name__)
-
-class App(threading.Thread):
-
-    def run(self):
-        cmdline, = self._args
-        p = subprocess.Popen(shlex.split(cmdline), **self._kwargs)
-        retcode = p.wait()
-        log.debug('process returned=%d', retcode)
 
 class Runner:
 
     def __init__(self, cwd=None, env=None, shell=False):
-        self._id = 1
         self._cwd = cwd
         self._env = env
         self._shell = shell
@@ -32,12 +20,16 @@ class Runner:
         self._stdin = subprocess.DEVNULL
         self._stdout = subprocess.DEVNULL
         self._stderr = subprocess.DEVNULL
+        # Set action to ignore to stop the OS from creating a zombie process.
+        # NOTE Setting the global signal handler here in the
+        # constructor has a bad smell, it should really go in a module
+        # init function or make Runner a Singleton. But this is a
+        # simple app that will only ever create one instance of Runner
+        # so leaving here.
+        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
     def run(self, cmdline, **kwargs):
         """ Run cmdline through subprocess, without shell. """
-        name = 'runner-{}'.format(self._id)
-        self._id += 1
-        args = cmdline,
         kwargs = {
                 'cwd': kwargs.get('cwd', self._cwd),
                 'env': kwargs.get('env', self._env),
@@ -46,5 +38,4 @@ class Runner:
                 'stdout': kwargs.get('stdout', self._stdout),
                 'stderr': kwargs.get('stderr', self._stderr),
             }
-        app = App(name=name, daemon=False, args=args, kwargs=kwargs)
-        app.start()
+        subprocess.Popen(shlex.split(cmdline), **kwargs)
