@@ -21,7 +21,7 @@ class DisplayError(Exception):
     """ Error connecting to or managing the display. """
     pass
 
-class Array:
+class TwodArray:
     """ Abstract away x, y access to a linear list. """
 
     def __init__(self, lst, xwidth):
@@ -186,7 +186,7 @@ class Display:
         keysyms_per_keycode = ctypes.c_int()
         kbmapping = xlib.xlib.XGetKeyboardMapping(self.xh, keymin, keycount, ctypes.byref(keysyms_per_keycode))
         #print('keysyms/keycode={}'.format(keysyms_per_keycode.value))
-        kbarray = Array(kbmapping, keysyms_per_keycode.value)
+        kbarray = TwodArray(kbmapping, keysyms_per_keycode.value)
         # Convert to non-ctypes.
         # dict(keycode=[KeySym])
         ret = dict([(y + keymin, [KeySym(kbarray(x, y)) for x in range(kbarray.xwidth)]) for y in range(keycount)])
@@ -339,7 +339,7 @@ class Display:
         keypermod = xmodmap.contents.max_keypermod
         modnames = [n for n, _ in xlib.KeyModifierMask._bits_]
         #print('xmodmap.max_keypermod={} modnames={}'.format(keypermod, modnames))
-        modarray = Array(xmodmap.contents.modifiermap, keypermod)
+        modarray = TwodArray(xmodmap.contents.modifiermap, keypermod)
         ret = dict([(modnames[y], [modarray(x, y) for x in range(keypermod)]) for y in range(len(modnames))])
         self.free(xmodmap)
         return ret
