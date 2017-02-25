@@ -32,12 +32,24 @@ class FootShell(clientcmd.ClientInitMixin):
         for i, win in enumerate(wins):
             print('{: 2d} "{}"'.format(i, win.name))
 
+    def desktops(self, args):
+        """ List desktops. """
+        if args.names:
+            print("setting desktop names: {}".format(args.names))
+        else:
+            names = self.client.getdesktopnames()
+            for i, name in enumerate(names):
+                print('{: 2d} "{}"'.format(i, name))
+
 def make_argparser(footsh):
     winparser = argparse.ArgumentParser(add_help=False)
     winparser.add_argument('--created', default=False, action='store_true', help='windows in creation order. Default: windows in stacking order.')
 
     parser = argparse.ArgumentParser()
     commands = nestedarg.NestedSubparser(parser.add_subparsers())
+    with commands('desktops', parents=[winparser], help='desktops') as c:
+        c.set_defaults(command=footsh.desktops)
+        c.add_argument('names', nargs='*', help='set desktop names')
     with commands('ls', parents=[winparser], help='list windows') as c:
         c.set_defaults(command=footsh.ls)
     with commands('activate', parents=[winparser], aliases=['a'], help='activate window') as c:

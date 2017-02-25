@@ -687,6 +687,20 @@ xlib.XFreeStringList.argtypes = ctypes.POINTER(ctypes.c_char_p),
 xlib.XTextPropertyToStringList.restype = Status
 xlib.XTextPropertyToStringList.argtypes = xtextproperty_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_char_p)), int_p
 
+# int Xutf8TextListToTextProperty(Display *display, char **list, int count, XICCEncodingStyle style, XTextProperty *text_prop_return);
+xlib.Xutf8TextListToTextProperty.argtypes = display_p, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int, XICCEncodingStyle, xtextproperty_p
+
+# int Xutf8TextPropertyToTextList(Display *display, XTextProperty *text_prop, char ***list_return, int *count_return);
+xlib.Xutf8TextPropertyToTextList.argtypes = display_p, xtextproperty_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_char_p)), int_p
+
+# void XSetTextProperty(Display *display, Window w, XTextProperty *text_prop, Atom property);
+xlib.XSetTextProperty.restype = None
+xlib.XSetTextProperty.argtypes = display_p, Window, xtextproperty_p, Atom
+
+# Status XGetTextProperty(Display *display, Window w, XTextProperty *text_prop_return, Atom property);
+xlib.XGetTextProperty.restype = Status
+xlib.XGetTextProperty.argtypes = display_p, Window, xtextproperty_p, Atom
+
 class InputFocus(ctypes.c_int, EnumMixin):
     RevertToNone        = 0
     RevertToPointerRoot = 1

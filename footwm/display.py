@@ -7,6 +7,8 @@ Copyright (c) 2016 Akce
 """
 import collections
 import ctypes
+import functools
+import operator
 
 from . import keydefs
 from . import xlib
@@ -397,6 +399,27 @@ class Display:
     def setinputfocus(self, window, revertto, time):
         xlib.xlib.XSetInputFocus(self.xh, window.window, revertto, time)
 
+    def gettextproperty(self, window, propertyname):
+        tp = xlib.XTextProperty()
+        status = xlib.xlib.XGetTextProperty(self.xh, window.window, addr(tp), self.atom[propertyname])
+        if status != 0:
+            # Convert to list of strings and free the XTextProperty data.
+            ret = self.textprop_to_lines(tp)
+            xlib.xlib.XFree(tp.value)
+        else:
+            ret = []
+        return ret
+
+    def settextproperty(self, window, strings, propertyname):
+        slen = len(strings)
+        cstrs = (ctypes.c_char_p * slen)()
+        for i, s in enumerate(strings):
+            cstrs[i] = s.encode('utf8')
+        tp = xlib.XTextProperty()
+        if xlib.xlib.Xutf8TextListToTextProperty(self.xh, cstrs, slen, xlib.XICCEncodingStyle.UTF8String, addr(tp)) == 0:
+            xlib.xlib.XSetTextProperty(self.xh, window.window, addr(textproperty), self.atom[propertyname])
+            xlib.xlib.XFree(tp.value)
+
     def setwmstate(self, window, winstate):
         state = xlib.WmState()
         state.state = xlib.WmStateState(winstate)
@@ -410,13 +433,35 @@ class Display:
     def sync(self, discard=False):
         xlib.xlib.XSync(self.xh, discard)
 
+    def strings_to_textprop(self, strings):
+        """ Create a XTexpProperty object that encodes the list of
+        strings. The text property object must be freed by the
+        caller. eg,
+        >>> tp = dobj.strings_to_textprop(["hello", "world"])
+        >>> xlib.XFree(tp.value)
+        """
+        slen = len(strings)
+        cstrs = (ctypes.c_char_p * slen)()
+        for i, s in enumerate(strings):
+            cstrs[i] = s.encode('utf8')
+        tp = xlib.XTextProperty()
+        xlib.xlib.Xutf8TextListToTextProperty(self.xh, cstrs, slen, xlib.XICCEncodingStyle.UTF8String, addr(tp))
+        return tp
+
     def textprop_to_lines(self, xtextprop):
         lines = []
-        #enc = 'utf8'
         enc = None
         if xtextprop.encoding == xlib.XA.STRING:
             # ICCCM 2.7.1 - XA_STRING == latin-1 encoding.
             enc = 'latin1'
+            convertfunc = xlib.xlib.XTextPropertyToStringList
+            # success === status > 0 === 0 < status
+            successp = functools.partial(operator.lt, 0)
+        elif xtextprop.encoding == self.atom['UTF8_STRING']:
+            enc = 'utf8'
+            convertfunc = functools.partial(xlib.xlib.Xutf8TextPropertyToTextList, self.xh)
+            # success === status == 0 === 0 == status
+            successp = functools.partial(operator.eq, 0)
 #        else:
 #            atomname = self.getatomname(xtextprop.encoding)
 #            #log.error('************ UNSUPPORTED TEXT ENCODING ATOM=%s %s', xtextprop.encoding, atomname)
@@ -424,8 +469,8 @@ class Display:
         if enc:
             nitems = ctypes.c_int()
             list_return = ctypes.POINTER(ctypes.c_char_p)()
-            status = xlib.xlib.XTextPropertyToStringList(addr(xtextprop), addr(list_return), addr(nitems))
-            if status > 0:
+            status = convertfunc(addr(xtextprop), addr(list_return), addr(nitems))
+            if successp(status):
                 lines = [str(list_return[i], enc) for i in range(nitems.value)]
                 #log.debug('xtext lines %s', lines)
                 xlib.xlib.XFreeStringList(list_return)

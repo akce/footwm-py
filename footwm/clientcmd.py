@@ -34,6 +34,9 @@ class ClientCommand:
             log.debug("0x%08x: closewindow index=%s win=%s", win.window, index, win)
             win.delete()
 
+    def getdesktopnames(self):
+        return self.ewmh.desktopnames
+
     def getwindowlist(self, stacking=True):
         return self.ewmh.clientliststacking if stacking else self.ewmh.clientlist
 

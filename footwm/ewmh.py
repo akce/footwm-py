@@ -30,6 +30,7 @@ class EwmhClient:
                 '_NET_CLIENT_LIST',
                 '_NET_CLIENT_LIST_STACKING',
                 '_NET_CLOSE_WINDOW',
+                '_NET_DESKTOP_NAMES',
                 '_NET_SUPPORTING_WM_CHECK',
                 '_NET_WM_FULL_PLACEMENT',
                 '_NET_WM_NAME',
@@ -63,6 +64,16 @@ class EwmhClient:
         except IndexError:
             aw = self.root.newchild(wid)
         return aw
+
+    @property
+    def desktopnames(self):
+        """ _NET_DESKTOP_NAMES """
+        return self.display.gettextproperty(self.root, '_NET_DESKTOP_NAMES')
+
+    @desktopnames.setter
+    def desktopnames(self, names):
+        """ _NET_DESKTOP_NAMES """
+        self.display.settextproperty(self.root, names, '_NET_DESKTOP_NAMES')
 
     def clientmessage(self, msg, win):
         """ Send an EWMH client message to the window manager.
