@@ -268,8 +268,7 @@ class ClientWindow(BaseWindow):
         self.display.setwmstate(self, winstate)
 
     def resize(self, availablegeom):
-        """ resize the window given the available geometry area.
-        """
+        """ resize the window given the available geometry area. """
         # Actual geom will be set in the configure notify handler.
         self.wantedgeom = self.sizer(self.geom, availablegeom, self.sizehints)
         if self.wantedgeom != self.geom:

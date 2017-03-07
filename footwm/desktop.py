@@ -85,6 +85,7 @@ class Desktop:
         # Focus the very top window.
         if family:
             w = family[0]
+            # TODO use a layout object to decide ideal window size.
             w.resize(self.root.geom)
             w.show()
             self.ewmh.activewindow = w

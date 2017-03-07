@@ -84,6 +84,7 @@ class Foot(object):
         e = event.xconfigure
         # Only handle if the notify event not caused by a sub-structure redirect.
         if e.event == e.window:
+            # This block of code resizes the window if it's still not at the ideal geometry.
             geom = display.Geometry(e)
             log.debug('0x%08x: ConfigureNotify %s', e.window, geom)
             try:
