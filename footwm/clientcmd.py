@@ -37,6 +37,9 @@ class ClientCommand:
     def getdesktopnames(self):
         return self.ewmh.desktopnames
 
+    def setdesktopnames(self, names):
+        self.ewmh.desktopnames = names
+
     def getwindowlist(self, stacking=True):
         return self.ewmh.clientliststacking if stacking else self.ewmh.clientlist
 

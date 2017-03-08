@@ -159,6 +159,16 @@ class EwmhWM(EwmhClient):
             cwindows[i] = w.window
         self.display.changeproperty(self.root, propname, xlib.XA.WINDOW, 32, xlib.PropMode.Replace, ctypes.byref(cwindows), lw)
 
+    @property
+    def desktopnames(self):
+        """ _NET_DESKTOP_NAMES """
+        return super().desktopnames
+
+    @desktopnames.setter
+    def desktopnames(self, names):
+        """ _NET_DESKTOP_NAMES """
+        self.display.settextproperty(self.root, names, '_NET_DESKTOP_NAMES')
+
     def __del__(self):
         self.display.destroywindow(self.window)
         self.window = None

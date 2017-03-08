@@ -36,6 +36,7 @@ class FootShell(clientcmd.ClientInitMixin):
         """ List desktops. """
         if args.names:
             print("setting desktop names: {}".format(args.names))
+            self.client.setdesktopnames(args.names)
         else:
             names = self.client.getdesktopnames()
             for i, name in enumerate(names):

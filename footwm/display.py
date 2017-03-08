@@ -417,7 +417,7 @@ class Display:
             cstrs[i] = s.encode('utf8')
         tp = xlib.XTextProperty()
         if xlib.xlib.Xutf8TextListToTextProperty(self.xh, cstrs, slen, xlib.XICCEncodingStyle.UTF8String, addr(tp)) == 0:
-            xlib.xlib.XSetTextProperty(self.xh, window.window, addr(textproperty), self.atom[propertyname])
+            xlib.xlib.XSetTextProperty(self.xh, window.window, addr(tp), self.atom[propertyname])
             xlib.xlib.XFree(tp.value)
 
     def setwmstate(self, window, winstate):
