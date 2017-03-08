@@ -24,7 +24,10 @@ class Foot(object):
         log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
         # TODO: worry about screens, displays, xrandr and xinerama!
         self.root = window.RootWindow(self.display, self.display.defaultrootwindow)
-        eventmask = xlib.InputEventMask.StructureNotify | xlib.InputEventMask.SubstructureRedirect | xlib.InputEventMask.SubstructureNotify
+        eventmask = xlib.InputEventMask.PropertyChange |	\
+                    xlib.InputEventMask.StructureNotify |	\
+                    xlib.InputEventMask.SubstructureRedirect |	\
+                    xlib.InputEventMask.SubstructureNotify
         self.display.install(self.root, eventmask)
         # We are now the window manager - continue initialisation.
         log.debug('0x%08x: root %s', self.root.window, self.root)
@@ -48,6 +51,7 @@ class Foot(object):
                 xlib.EventName.FocusOut:            self.handle_focusout,
                 xlib.EventName.MapNotify:           self.handle_mapnotify,
                 xlib.EventName.MapRequest:          self.handle_maprequest,
+                xlib.EventName.PropertyNotify:      self.handle_propertynotify,
                 xlib.EventName.UnmapNotify:         self.handle_unmapnotify,
                 }
 
@@ -173,6 +177,17 @@ class Foot(object):
             log.error('0x%08x: MapRequest for unknown window!!!', w)
         else:
             self._desktop.managewindow(win)
+
+    def handle_propertynotify(self, event):
+        """ Property on the root window has changed. """
+        e = event.xproperty
+        for k, v in self.display.atom.items():
+            if v == e.atom:
+                atomname = k
+                break
+        else:
+            atomname = 'Unknown'
+        log.debug('0x%08x: PropertyNotify %s:%d send_event=%s', e.window, atomname, e.atom, e.send_event)
 
     def handle_unmapnotify(self, event):
         e = event.xunmap

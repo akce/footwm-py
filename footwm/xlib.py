@@ -400,6 +400,22 @@ class XMapRequestEvent(ctypes.Structure):
             ('window', Window),
             ]
 
+class PropertyState(ctypes.c_int, EnumMixin):
+    NewValue = 0
+    Deleted = 1
+
+class XPropertyEvent(ctypes.Structure):
+    _fields_ = [
+            ('type', ctypes.c_int),
+            ('serial', ctypes.c_ulong),
+            ('send_event', Bool),
+            ('display', display_p),
+            ('window', Window),
+            ('atom', Atom),
+            ('time', Time),
+            ('state', PropertyState),
+            ]
+
 class XUnmapEvent(ctypes.Structure):
     _fields_ = [
             ('type', ctypes.c_int),
@@ -424,6 +440,7 @@ class XEvent(ctypes.Union):
             ('xkey', XKeyEvent),
             ('xmap', XMapEvent),
             ('xmaprequest', XMapRequestEvent),
+            ('xproperty', XPropertyEvent),
             ('xunmap', XUnmapEvent),
             ('pad', ctypes.c_long * 24),
             ]
