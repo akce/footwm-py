@@ -77,7 +77,7 @@ class Desktop:
             if deskname not in self._specials:
                 # Move windows from the deleted desktop to the unassigned desktop.
                 udesk = self._deskwins[self._unassigned]
-                for w in self.stacklist:
+                for w in self.windowlist:
                     udesk.append(w)
                 del self._desklist[index]
                 del self._deskwins[deskname]
@@ -112,16 +112,17 @@ class Desktop:
         return [window for windowid, window in self.root.children.items() if window in self.stacklist]
 
     @property
-    def stacklist(self):
-        """ Usage order of windows in current desktop. """
-        # Get the windows for the current desktop.
+    def windowlist(self):
+        """ Windows for the current desktop only. """
         return self._deskwins[self._desklist[0]]
 
     def _makeunassigned(self):
         """ Import windows that look like they'll need to be managed into the unassigned group. """
-        stacklist = [w for w in self.root.children.values() if managewindowp(w)]
-        self._deskwins[self._unassigned] = stacklist
-        for window in stacklist:
+        # stacklist is the usage order of windows.
+        self.stacklist = [w for w in self.root.children.values() if managewindowp(w)]
+        # So far, all windows are unassigned at startup.
+        self._deskwins[self._unassigned] = self.stacklist[:]
+        for window in self.stacklist:
             log.debug('0x%08x: importing window %s', window.window, window)
             # Manage imported windows.
             window.manage(xlib.InputEventMask.StructureNotify)
@@ -131,27 +132,29 @@ class Desktop:
             # Put window to the top of the list and update display.
             # XXX Is this check needed?
             if window not in self.stacklist:
-                i = 0
-                self.stacklist.insert(i, window)
+                self.windowlist.insert(0, window)
+                self.stacklist.insert(0, window)
             window.manage(xlib.InputEventMask.EnterWindow | xlib.InputEventMask.FocusChange | xlib.InputEventMask.StructureNotify)
             self.raisewindow(window)
             self.redraw()
 
     def unmanagewindow(self, win):
         """ Remove the window from window lists. """
-        del self.root.children[win.window]
         # Remove from our own managed lists, and from the ewmh properties.
-        # XXX Check if the window was part of the current desktop and visible!
+        del self.root.children[win.window]
+        self.stacklist.remove(win)
         doredraw = False
         for dname, dwins in self._deskwins.items():
             if win in dwins:
                 dwins.remove(win)
                 if dname == self._desklist[0]:
+                    # XXX Check if the window is visible!
                     doredraw = True
         else:
             # Window not found... Maybe log an internal error?
             pass
-
+        if win in self.stacklist:
+            self.stacklist.remove(win)
         if doredraw:
             self._updatewindowhints()
             self.redraw()
@@ -162,28 +165,33 @@ class Desktop:
 
     def _updatewindowhints(self):
         """ Update ewmh client window lists. """
+        # XXX Only update clientlist on newwindow, delwindow, changedesktop.
         self.ewmh.clientlist = self.clientlist
         self.ewmh.clientliststacking = self.stacklist
+        log.debug("_updatewindowhints: stacklist=[{}]".format(' '.join('0x{:08x}'.format(x.window) for x in self.stacklist)))
 
     def raisewindow(self, win):
         """ Select the family of windows that belong to the window. """
+        log.debug('0x%08x: raising %s', win.window, str(win))
         # family accounts for transients
         # TODO window groups. See ICCCM 4.1.11
         # XXX Automatically select group if the window is in a different group?
         # XXX Maybe not, how to handle case where the window is in multiple groups?
-        if win in self.stacklist:
+        if win in self.windowlist:
             for w in win.family:
+                self.windowlist.remove(w)
                 self.stacklist.remove(w)
             for w in reversed(win.family):
+                self.windowlist.insert(0, w)
                 self.stacklist.insert(0, w)
             self._updatewindowhints()
 
     def redraw(self):
         """ Redraw all visible windows. Any parents of transient windows will also be shown. """
         try:
-            family = self.stacklist[0].family
+            family = self.windowlist[0].family
         except IndexError:
-            log.warning('0x{:08x}: show stacklist is empty.'.format(self.root.window))
+            log.warning('0x{:08x}: show windowlist is empty.'.format(self.root.window))
             family = []
         # Focus the very top window.
         if family:
@@ -194,20 +202,22 @@ class Desktop:
             self.ewmh.activewindow = w
             log.debug('0x%08x: showing window=%s', w.window, w)
         # Hide every window that's not in the family of windows.
-        for w in self.stacklist:
+        for w in self.windowlist:
             if w not in family:
                 log.debug('0x%08x: hiding %s', w.window, w)
                 # XXX only hide visible windows!!
                 w.hide()
 
     def withdrawwindow(self, win):
+        # Note the use of stacklist, rather than winlist. That way windows in other desktops can be withdrawn.
         if win.window in self.stacklist:
             # X has unmapped the window, we can now put it in the withdrawn state.
             # Mark window Withdrawn. See ICCCM 4.1.3.1
             win.wm_state = xlib.WmStateState.Withdrawn
             log.debug('0x%08x: Unmap successful %s', e.window, win)
-            # Since the window has been unmapped(hidden) show the next window in the list.
-            self.redraw()
+            if win in self.windowlist:
+                # Since the window has been unmapped(hidden) show the next window in the list.
+                self.redraw()
 
 def managewindowp(win):
     """ manage-window-predicate. Return True if the window should be managed, False otherwise. """

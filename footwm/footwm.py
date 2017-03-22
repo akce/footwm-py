@@ -75,7 +75,7 @@ class Foot(object):
                 self._desktop.raisewindow(win=win)
                 # Check if raisewindow worked before redrawing.
                 # XXX Not sure if i like this....
-                if self._desktop.stacklist[0] == win:
+                if self._desktop.windowlist[0] == win:
                     self._desktop.redraw()
             elif e.message_type == self.display.atom['_NET_CLOSE_WINDOW']:
                 win.delete()
