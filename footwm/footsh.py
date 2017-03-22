@@ -20,15 +20,15 @@ class FootShell(clientcmd.ClientInitMixin):
 
     def window_activate(self, args):
         """ Activate, bring to front, the window. """
-        self.client.activatewindow(index=args.index, stacking=args.created)
+        self.client.activatewindow(index=args.index, stacking=not args.created)
 
     def window_close(self, args):
         """ Close, delete, the window. """
-        self.client.closewindow(index=args.index, stacking=args.created)
+        self.client.closewindow(index=args.index, stacking=not args.created)
 
     def window_ls(self, args):
         """ List windows. """
-        wins = self.client.getwindowlist(stacking=args.created)
+        wins = self.client.getwindowlist(stacking=not args.created)
         for i, win in enumerate(wins):
             print('{: 2d} "{}"'.format(i, win.name))
 
