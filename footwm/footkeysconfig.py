@@ -14,4 +14,10 @@ keyconfig.setmodifiers(requiremods=[scrolllock], ignoremods=[capslock, numlock])
 keyconfig.addkey('F5', functools.partial(client.activatewindow, stacking=stacking, index=1))
 keyconfig.addkey('F6', functools.partial(client.activatewindow, stacking=stacking, index=2))
 keyconfig.addkey('F7', functools.partial(client.activatewindow, stacking=stacking, index=3))
-keyconfig.addkey('F8', functools.partial(client.activatewindow, stacking=stacking, index=4))
+keyconfig.addkey('F8', functools.partial(client.closewindow, stacking=stacking, index=0))
+
+# Group select.
+keyconfig.addkey('F9', functools.partial(client.selectdesktop, index=1))
+keyconfig.addkey('F10', functools.partial(client.selectdesktop, index=2))
+keyconfig.addkey('F11', functools.partial(client.selectdesktop, index=3))
+keyconfig.addkey('F12', functools.partial(client.deletedesktop, index=0))

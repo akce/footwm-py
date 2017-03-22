@@ -8,11 +8,11 @@ Copyright (c) 2016 Akce
 import logging
 
 # Local modules.
-from . import xlib
 from . import desktop
 from . import display
 from . import window
 from . import xevent
+from . import xlib
 import footwm.log
 
 log = footwm.log.make(name=__name__)
@@ -38,7 +38,7 @@ class Foot(object):
         self.display.errorhandler = xerrorhandler
         self._makehandlers()
         self._desktop = desktop.Desktop(self.display, self.root)
-        self._desktop.show()
+        self._desktop.redraw()
 
     def _makehandlers(self):
         self.eventhandlers = {
@@ -72,7 +72,11 @@ class Foot(object):
         else:
             if e.message_type == self.display.atom['_NET_ACTIVE_WINDOW']:
                 log.debug('0x%08x: _NET_ACTIVE_WINDOW', e.window)
-                self._desktop.show(win=win)
+                self._desktop.raisewindow(win=win)
+                # Check if raisewindow worked before redrawing.
+                # XXX Not sure if i like this....
+                if self._desktop.stacklist[0] == win:
+                    self._desktop.redraw()
             elif e.message_type == self.display.atom['_NET_CLOSE_WINDOW']:
                 win.delete()
                 # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
@@ -188,6 +192,8 @@ class Foot(object):
         else:
             atomname = 'Unknown'
         log.debug('0x%08x: PropertyNotify %s:%d send_event=%s', e.window, atomname, e.atom, e.send_event)
+        if e.atom == self.display.atom['FOOT_COMMANDV']:
+            self._desktop.oncommand()
 
     def handle_unmapnotify(self, event):
         e = event.xunmap

@@ -206,7 +206,7 @@ def main():
         # namespace. One of these is handy and would be used by every
         # config.
         gl = globals().copy()
-        gl['client'] = clientcmd.ClientCommand(fk.display, fk.root, fk.ewmh)
+        gl['client'] = clientcmd.ClientCommand(fk.display, fk.root, fk.ewmh, fk.command)
         loadconfig(getconfigfilename(args), gl, locals())
     try:
         xevent.run(fk.display, fk.eventhandlers)

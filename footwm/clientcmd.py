@@ -6,6 +6,7 @@ Copyright (c) 2016 Akce
 
 import types
 
+from . import command
 from . import display
 from . import ewmh
 from . import log as logger
@@ -15,10 +16,11 @@ log = logger.make(name=__name__)
 
 class ClientCommand:
     """ X client commands. """
-    def __init__(self, display, root, ewmh):
+    def __init__(self, display, root, ewmh, command):
         self.display = display
         self.root = root
         self.ewmh = ewmh
+        self.command = command
 
     def activatewindow(self, stacking=True, index=None, window=None):
         """ Send an EWMH _NET_ACTIVE_WINDOW message to the window manager. """
@@ -34,11 +36,20 @@ class ClientCommand:
             log.debug("0x%08x: closewindow index=%s win=%s", win.window, index, win)
             win.delete()
 
+    def adddesktop(self, name, index):
+        self.command.adddesktop(name, index)
+
+    def deletedesktop(self, index):
+        self.command.deletedesktop(index)
+
+    def renamedesktop(self, index, name):
+        self.command.renamedesktop(index, name)
+
+    def selectdesktop(self, index):
+        self.command.selectdesktop(index)
+
     def getdesktopnames(self):
         return self.ewmh.desktopnames
-
-    def setdesktopnames(self, names):
-        self.ewmh.desktopnames = names
 
     def getwindowlist(self, stacking=True):
         return self.ewmh.clientliststacking if stacking else self.ewmh.clientlist
@@ -65,3 +76,4 @@ class ClientInitMixin:
         log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
         self.root = window.RootWindow(self.display, self.display.defaultrootwindow)
         self.ewmh = ewmh.EwmhClient(self.display, self.root)
+        self.command = command.FootCommandClient(self.display, self.root)
