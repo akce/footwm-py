@@ -84,6 +84,9 @@ class ClientRootMixin(Base):
     def activewindow(self, win):
         self.clientmessage('_NET_ACTIVE_WINDOW', win)
 
+    def closewindow(self, win):
+        self.clientmessage('_NET_CLOSE_WINDOW', win)
+
     def clientmessage(self, msg, win):
         """ Send an EWMH client message to the window manager.
         See EWMH: Root Window Properties (and Related Messages). """

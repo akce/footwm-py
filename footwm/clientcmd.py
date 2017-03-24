@@ -29,7 +29,7 @@ class ClientCommand:
         win = self._getwindow(stacking=stacking, index=index, window=window)
         if win:
             log.debug("0x%08x: closewindow index=%s win=%s", win.window, index, win)
-            win.delete()
+            self.root.closewindow(win)
 
     def adddesktop(self, name, index):
         self.root.adddesktop(name, index)
