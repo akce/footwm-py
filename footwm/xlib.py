@@ -62,6 +62,7 @@ xlib = ctypes.CDLL(ctypes.util.find_library('X11'))
 # c_int anyway.
 Atom = ctypes.c_ulong
 XID = ctypes.c_ulong
+Cardinal = ctypes.c_uint
 Colormap = XID
 Window = XID
 Time = ctypes.c_ulong
@@ -77,6 +78,7 @@ byte_p = ctypes.POINTER(ctypes.c_ubyte)
 long_p = ctypes.POINTER(ctypes.c_long)
 ulong_p = ctypes.POINTER(ctypes.c_ulong)
 int_p = ctypes.POINTER(ctypes.c_int)
+uint_p = ctypes.POINTER(ctypes.c_uint)
 char_p = ctypes.POINTER(ctypes.c_char)
 
 ## Opaque pointer types.
@@ -669,6 +671,7 @@ xlib.XMoveResizeWindow.argtypes = display_p, Window, ctypes.c_int, ctypes.c_int,
 # X protocol atoms, see Xatom.h
 class XA(ctypes.c_ulong, EnumMixin):
     ATOM        = 4
+    CARDINAL    = 6
     STRING      = 31
     WINDOW      = 33
 

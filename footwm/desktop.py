@@ -163,6 +163,8 @@ class Desktop:
 
     def _updatedesktophints(self):
         """ Update desktop atoms. """
+        self.root.numberofdesktops = len(self._desklist)
+        #log.debug('0x%08x: numberofdesktops=%s %d', self.root.window, self.root.numberofdesktops, len(self._desklist))
         self.root.desktopnames = self._desklist
 
     def _updatewindowhints(self):

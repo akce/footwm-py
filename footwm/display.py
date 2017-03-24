@@ -11,7 +11,10 @@ import functools
 import operator
 
 from . import keydefs
+from . import log as logmodule
 from . import xlib
+
+log = logmodule.make(name=__name__)
 
 # For when a Geometry is manually created.
 Geomtuple = collections.namedtuple('Geomtuple', ['x', 'y', 'width', 'height'])
@@ -279,6 +282,7 @@ class Display:
             self.free(cpsizehints)
         else:
             hints = None
+        #log.debug("0x%08x: getwmnormalsizehints status=%d hints=%s", win.window, status, hints)
         return hints
 
     def getwmstate(self, window):
@@ -301,6 +305,27 @@ class Display:
                 state = sp.state
             xlib.xlib.XFree(prop_return)
         return state
+
+    def getcardinalproperty(self, win, propname):
+        cardinal = None
+        propatom = self.atom[propname]
+        actual_type_return = xlib.Atom()
+        actual_format_return = ctypes.c_int()
+        nitems_return = ctypes.c_ulong(0)
+        bytes_after_return = ctypes.c_ulong()
+        prop_return = xlib.byte_p()
+        llen = 1
+        ret = xlib.xlib.XGetWindowProperty(self.xh, win.window, propatom, 0, llen, False, xlib.XA.CARDINAL, addr(actual_type_return), addr(actual_format_return), addr(nitems_return), addr(bytes_after_return), addr(prop_return))
+        if ret == 0:
+            if nitems_return.value > 0:
+                cardinal = ctypes.cast(prop_return, xlib.uint_p).contents.value
+            self.free(prop_return)
+        #log.debug('0x%08x: getcardinalproperty %s llen=%d ret=%d', win.window, propname, llen, ret)
+        return cardinal
+
+    def setcardinalproperty(self, win, propname, value):
+        ccardinal = xlib.Cardinal(value)
+        self.changeproperty(win, propname, xlib.XA.CARDINAL, 32, xlib.PropMode.Replace, ctypes.byref(ccardinal), 1)
 
     def getpropertywindowid(self, win, propname):
         wid = None

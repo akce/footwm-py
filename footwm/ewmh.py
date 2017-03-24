@@ -33,6 +33,7 @@ class Base:
                 '_NET_CLIENT_LIST_STACKING',
                 '_NET_CLOSE_WINDOW',
                 '_NET_DESKTOP_NAMES',
+                '_NET_NUMBER_OF_DESKTOPS',
                 '_NET_SUPPORTING_WM_CHECK',
                 '_NET_WM_FULL_PLACEMENT',
                 '_NET_WM_NAME',
@@ -163,6 +164,15 @@ class WmRootMixin(Base):
     def clientliststacking(self, windows):
         """ _NET_CLIENT_LIST_STACKING """
         self._setwindows(windows, '_NET_CLIENT_LIST_STACKING')
+
+    # numberofdesktops getter could go in Base, but I don't think my clients will use it.
+    @property
+    def numberofdesktops(self):
+        return self.display.getcardinalproperty(self, '_NET_NUMBER_OF_DESKTOPS')
+
+    @numberofdesktops.setter
+    def numberofdesktops(self, num):
+        self.display.setcardinalproperty(self, '_NET_NUMBER_OF_DESKTOPS', num)
 
     def _setwindows(self, windows, propname):
         lw = len(windows)
