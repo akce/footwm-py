@@ -40,9 +40,6 @@ class ClientRootMixin(Base):
     def renamedesktop(self, index, newname):
         self.footcommand = ['desktop', 'rename', str(index), newname]
 
-    def selectdesktop(self, index):
-        self.footcommand = ['desktop', 'select', str(index)]
-
 class WmCommandReader:
     """ Window Manager Root window interface. """
 
@@ -79,10 +76,6 @@ class WmCommandReader:
                     index = int(commandv[2])
                     name = commandv[3]
                     self.desktop.renamedesktop(index=index, newname=name)
-                elif subcommand == 'select':
-                    # Select desktop
-                    index = int(commandv[2])
-                    self.desktop.selectdesktop(index=index)
             elif command == 'window':
                 # Command modifies a window in some way.
                 # Copy to desktop

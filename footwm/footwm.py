@@ -68,9 +68,8 @@ class Foot(object):
         try:
             win = self.root.children[e.window]
         except KeyError:
-            log.error('0x%08x: No window object for client message', e.window)
-        else:
-            self._desktop.handle_clientmessage(e.message_type, win)
+            win = None
+        self._desktop.handle_clientmessage(e.message_type, e, win=win)
 
     def handle_createnotify(self, event):
         # New window has been created.

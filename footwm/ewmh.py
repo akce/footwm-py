@@ -32,6 +32,7 @@ class Base:
                 '_NET_CLIENT_LIST',
                 '_NET_CLIENT_LIST_STACKING',
                 '_NET_CLOSE_WINDOW',
+                '_NET_CURRENT_DESKTOP',
                 '_NET_DESKTOP_NAMES',
                 '_NET_NUMBER_OF_DESKTOPS',
                 '_NET_SUPPORTING_WM_CHECK',
@@ -41,6 +42,11 @@ class Base:
         for s in self.supported:
             self.display.add_atom(s)
         self.display.add_atom('_NET_SUPPORTED')
+
+    @property
+    def currentdesktop(self):
+        """ _NET_CURRENT_DESKTOP """
+        return self.display.getcardinalproperty(self, '_NET_CURRENT_DESKTOP')
 
     @property
     def desktopnames(self):
@@ -83,18 +89,29 @@ class ClientRootMixin(Base):
 
     @activewindow.setter
     def activewindow(self, win):
-        self.clientmessage('_NET_ACTIVE_WINDOW', win)
+        self.clientmessage('_NET_ACTIVE_WINDOW', win=win)
 
     def closewindow(self, win):
-        self.clientmessage('_NET_CLOSE_WINDOW', win)
+        self.clientmessage('_NET_CLOSE_WINDOW', win=win)
 
-    def clientmessage(self, msg, win):
+    @property
+    def currentdesktop(self):
+        return super().currentdesktop
+
+    @currentdesktop.setter
+    def currentdesktop(self, value):
+        self.clientmessage('_NET_CURRENT_DESKTOP', l0=value)
+
+    def clientmessage(self, msg, win=None, l0=None):
         """ Send an EWMH client message to the window manager.
         See EWMH: Root Window Properties (and Related Messages). """
         eventmask = xlib.InputEventMask.SubstructureNotify | xlib.InputEventMask.SubstructureRedirect
         ev = xlib.XClientMessageEvent()
         ev.type = xlib.EventName.ClientMessage
-        ev.window = win.window
+        if win:
+            ev.window = win.window
+        if l0 is not None:
+            ev.data.l[0] = l0
         ev.message_type = self.display.atom[msg]
         ev.send_event = True
         ev.format = 32
@@ -165,6 +182,14 @@ class WmRootMixin(Base):
         """ _NET_CLIENT_LIST_STACKING """
         self._setwindows(windows, '_NET_CLIENT_LIST_STACKING')
 
+    @property
+    def currentdesktop(self):
+        return super().currentdesktop
+
+    @currentdesktop.setter
+    def currentdesktop(self, value):
+        self.display.setcardinalproperty(self, '_NET_CURRENT_DESKTOP', value)
+
     # numberofdesktops getter could go in Base, but I don't think my clients will use it.
     @property
     def numberofdesktops(self):
@@ -192,7 +217,7 @@ class WmCommandReader:
         self.root = root
         self.desktop = desktop
 
-    def handle_clientmessage(self, msgid, win):
+    def handle_clientmessage(self, msgid, clientevent, win=None):
         if msgid == self.display.atom['_NET_ACTIVE_WINDOW']:
             log.debug('0x%08x: _NET_ACTIVE_WINDOW', win.window)
             self.desktop.raisewindow(win=win)
@@ -203,5 +228,7 @@ class WmCommandReader:
         elif msgid == self.display.atom['_NET_CLOSE_WINDOW']:
             win.delete()
             # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
+        elif msgid == self.display.atom['_NET_CURRENT_DESKTOP']:
+            self.desktop.selectdesktop(clientevent.data.l[0])
 
 __all__ = ClientRootMixin, WmRootMixin, WmCommandReader

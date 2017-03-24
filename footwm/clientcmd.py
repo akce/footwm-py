@@ -41,7 +41,7 @@ class ClientCommand:
         self.root.renamedesktop(index, name)
 
     def selectdesktop(self, index):
-        self.root.selectdesktop(index)
+        self.root.currentdesktop = index
 
     def getdesktopnames(self):
         return self.root.desktopnames

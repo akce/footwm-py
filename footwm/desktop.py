@@ -27,8 +27,8 @@ class Desktop:
         self._currentdesk = None
         self.selectdesktop(0)
 
-    def handle_clientmessage(self, msgid, win):
-        self._ewmhreader.handle_clientmessage(msgid, win)
+    def handle_clientmessage(self, msgid, clientevent, win=None):
+        self._ewmhreader.handle_clientmessage(msgid, clientevent, win)
 
     def handle_propertynotify(self, atom):
         """ Handle command received from a client. """
