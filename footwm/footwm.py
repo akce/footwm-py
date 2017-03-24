@@ -23,7 +23,7 @@ class Foot(object):
         self.display = display.Display(displayname)
         log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
         # TODO: worry about screens, displays, xrandr and xinerama!
-        self.root = window.RootWindow(self.display, self.display.defaultrootwindow)
+        self.root = window.WmRoot(self.display, self.display.defaultrootwindow)
         eventmask = xlib.InputEventMask.PropertyChange |	\
                     xlib.InputEventMask.StructureNotify |	\
                     xlib.InputEventMask.SubstructureRedirect |	\
@@ -70,16 +70,7 @@ class Foot(object):
         except KeyError:
             log.error('0x%08x: No window object for client message', e.window)
         else:
-            if e.message_type == self.display.atom['_NET_ACTIVE_WINDOW']:
-                log.debug('0x%08x: _NET_ACTIVE_WINDOW', e.window)
-                self._desktop.raisewindow(win=win)
-                # Check if raisewindow worked before redrawing.
-                # XXX Not sure if i like this....
-                if self._desktop.windowlist[0] == win:
-                    self._desktop.redraw()
-            elif e.message_type == self.display.atom['_NET_CLOSE_WINDOW']:
-                win.delete()
-                # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
+            self._desktop.handle_clientmessage(e.message_type, win)
 
     def handle_createnotify(self, event):
         # New window has been created.
@@ -192,8 +183,7 @@ class Foot(object):
         else:
             atomname = 'Unknown'
         log.debug('0x%08x: PropertyNotify %s:%d send_event=%s', e.window, atomname, e.atom, e.send_event)
-        if e.atom == self.display.atom['FOOT_COMMANDV']:
-            self._desktop.oncommand()
+        self._desktop.handle_propertynotify(e.atom)
 
     def handle_unmapnotify(self, event):
         e = event.xunmap

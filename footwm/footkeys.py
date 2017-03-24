@@ -79,7 +79,7 @@ class KeyBuilder:
             # No exception occurred, install the keymap.
             self.footkeys._install(self._keysymactions, requiremods=self._requiremods, ignoremods=self._ignoremods)
 
-class FootKeys(clientcmd.ClientInitMixin):
+class FootKeys:
 
     def __init__(self, displayname=None):
         """
@@ -88,7 +88,7 @@ class FootKeys(clientcmd.ClientInitMixin):
         All requiremods values must all be applied for a key in this keymap to match.
         All ignoremods values are all masked out and ignored in keypress events.
         """
-        super().__init__(displayname=displayname)
+        self.display, self.root = clientcmd.makedisplayroot(displayname)
         self._makehandlers()
 
     def _makehandlers(self):
@@ -206,7 +206,7 @@ def main():
         # namespace. One of these is handy and would be used by every
         # config.
         gl = globals().copy()
-        gl['client'] = clientcmd.ClientCommand(fk.display, fk.root, fk.ewmh, fk.command)
+        gl['client'] = clientcmd.ClientCommand(fk.root)
         loadconfig(getconfigfilename(args), gl, locals())
     try:
         xevent.run(fk.display, fk.eventhandlers)

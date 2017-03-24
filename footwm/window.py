@@ -39,7 +39,10 @@ eg,
 
 import collections
 
+from . import command
+from . import ewmh
 from . import log as xlog
+from . import utils
 from . import xlib
 
 log = xlog.make(name=__name__)
@@ -89,15 +92,17 @@ def transientsizer(currentgeom, availablegeom, sizehints):
     # TODO just return as honourable max sizer.
     return honourablemaxsizer(currentgeom, availablegeom, sizehints)
 
-class BaseWindow(object):
+class Base:
 
-    def __init__(self, display, window):
+    def __init__(self, display, windowid):
+        super().__init__()
         self.display = display
-        self.window = window
+        self.window = windowid
         try:
             self.override_redirect, self.geom, self.map_state = self.display.getwindowattributes(self.window)
         except (TypeError, ValueError) as e:
-            raise WindowError('0x%08x: getwindowattributes failed %s', self.window.window, e)
+            raise WindowError('0x%08x: getwindowattributes failed %s', self.window, e)
+        # XXX Premature optimisation? Just use wm_name....
         self.name = self.wm_name
 
     def manage(self, eventmask):
@@ -145,17 +150,18 @@ class BaseWindow(object):
         except AttributeError:
             pass
         try:
-            # RootWindow
+            # WmRoot attributes
             if self.children:
                 args.append("children=[{}]".format(' '.join('0x{:08x}'.format(x.window) for x in self.children.values())))
         except AttributeError:
             pass
         return '{}({})'.format(self.__class__.__name__, ' '.join(args))
 
-class RootWindow(BaseWindow):
+class WmRoot(ewmh.WmRootMixin, Base):
+    """ WindowManager-side root window. ie, The WmRoot instance will handle Client -> root-window messages. """
 
-    def __init__(self, display, window):
-        super().__init__(display, window)
+    def __init__(self, display, windowid):
+        super().__init__(display, windowid)
         self._import_children()
 
     def newchild(self, windowid):
@@ -179,37 +185,19 @@ class RootWindow(BaseWindow):
         log.debug('0x%08x: transientfor=%s', windowid, transientfor)
         if transientfor is None:
             # Regular window.
-            window = NormalWindow(self.display, windowid)
+            window = WmNormal(self.display, windowid)
         else:
-            window = TransientWindow(self.display, windowid, self.children.get(transientfor, None))
+            window = WmTransient(self.display, windowid, self.children.get(transientfor, None))
         return window
 
-class ClientWindow(BaseWindow):
+class WmWindowClientWindow(Base):
+    """ Methods common to both WindowManager windows, and Client windows. """
 
-    def __init__(self, display, window, sizer):
-        super().__init__(display, window)
-        self.sizer = sizer
+    def __init__(self, display, windowid):
+        super().__init__(display, windowid)
         self.wantedgeom = self.geom
         wm_state = self.wm_state
         self.res_name, self.res_class = self.wm_class
-        self.sizehints = self.display.getwmnormalhints(self)
-        # The family of windows for a normal client window is only itself.
-        self.family = [self]
-
-    def hide(self):
-        self.display.unmapwindow(self.window)
-
-    def show(self):
-        self.display.mapwindow(self)
-
-    def focus(self):
-        log.debug('0x%08x: focus', self.window)
-        msg = 'WM_TAKE_FOCUS'
-        try:
-            self.clientmessage(msg)
-        except KeyError:
-            #log.debug('0x%08x: %s not supported', self.window, msg)
-            self.display.setinputfocus(self, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
 
     def _sendclientmessage(self, atom, time):
         """ Send a ClientMessage event to window. """
@@ -247,11 +235,13 @@ class ClientWindow(BaseWindow):
         return self.map_state == self.map_state.IsUnmapped
 
     @property
+    @utils.memoise
     def wm_class(self):
         """ WM_CLASS is a tuple of resource name & class. See ICCCM 4.1.2.5 """
         return self.display.getclasshint(self)
 
     @property
+    @utils.memoise
     def wm_protocols(self):
         """ Return dict(name -> atom) of ATOMs comprising supported WM_PROTOCOLS for the client window. """
         return self.display.getprotocols(self)
@@ -261,6 +251,38 @@ class ClientWindow(BaseWindow):
         state = self.display.getwmstate(self)
         log.debug('0x%08x: Get WM_STATE state=%s', self.window, state)
         return state
+
+class WmWindow(WmWindowClientWindow):
+    """ Window functions as needed by the Window Manager. """
+
+    def __init__(self, display, windowid, sizer):
+        super().__init__(display, windowid)
+        self.sizer = sizer
+
+    @property
+    @utils.memoise
+    def sizehints(self):
+        return self.display.getwmnormalhints(self)
+
+    def hide(self):
+        self.display.unmapwindow(self.window)
+
+    def show(self):
+        self.display.mapwindow(self)
+
+    def focus(self):
+        log.debug('0x%08x: focus', self.window)
+        msg = 'WM_TAKE_FOCUS'
+        try:
+            self.clientmessage(msg)
+            # XXX Why a KeyError exception here????
+        except KeyError:
+            #log.debug('0x%08x: %s not supported', self.window, msg)
+            self.display.setinputfocus(self, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
+
+    @property
+    def wm_state(self):
+        return super().wm_state
 
     @wm_state.setter
     def wm_state(self, winstate):
@@ -275,15 +297,17 @@ class ClientWindow(BaseWindow):
             log.debug('0x%08x: attempt resize %s -> %s', self.window, self.geom, self.wantedgeom)
             self.display.moveresizewindow(self, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
 
-class NormalWindow(ClientWindow):
+class WmNormal(WmWindow):
 
-    def __init__(self, display, window, sizer=honourablemaxsizer):
-        super().__init__(display, window, sizer)
+    def __init__(self, display, windowid, sizer=honourablemaxsizer):
+        super().__init__(display, windowid, sizer)
+        # The family of windows for a normal window is only itself.
+        self.family = [self]
 
-class TransientWindow(ClientWindow):
+class WmTransient(WmWindow):
 
-    def __init__(self, display, window, transientfor):
-        super().__init__(display, window, transientsizer)
+    def __init__(self, display, windowid, transientfor):
+        super().__init__(display, windowid, transientsizer)
         self.transientfor = transientfor
         # The family of windows for a transient includes the parent, and potentially, that parents parents etc..
         try:
@@ -293,3 +317,23 @@ class TransientWindow(ClientWindow):
             # Xwindows seems to be a land where anything goes!
             # Set the family like a normal window but we'll still draw like a transient.
             self.family = [self]
+
+class ClientRoot(command.ClientRootMixin, ewmh.ClientRootMixin, Base):
+
+    def __init__(self, display, windowid):
+        super().__init__(display, windowid)
+        self.children = collections.OrderedDict()
+
+    def newchild(self, windowid):
+        """ Create a new child window. """
+        window = ClientWindow(self.display, windowid)
+        # Add the window to our child dict.
+        self.children[windowid] = window
+        return window
+
+class ClientWindow(WmWindowClientWindow):
+
+    def __init__(self, display, windowid):
+        super().__init__(display, windowid)
+
+__all__ = WmRoot, ClientRoot

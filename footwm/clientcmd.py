@@ -6,28 +6,23 @@ Copyright (c) 2016 Akce
 
 import types
 
-from . import command
 from . import display
-from . import ewmh
 from . import log as logger
 from . import window
 
 log = logger.make(name=__name__)
 
 class ClientCommand:
-    """ X client commands. """
-    def __init__(self, display, root, ewmh, command):
-        self.display = display
+    """ Higher level X client commands. They will interpret things like indexes etc. """
+    def __init__(self, root):
         self.root = root
-        self.ewmh = ewmh
-        self.command = command
 
     def activatewindow(self, stacking=True, index=None, window=None):
         """ Send an EWMH _NET_ACTIVE_WINDOW message to the window manager. """
         win = self._getwindow(stacking=stacking, index=index, window=window)
         if win:
             log.debug("0x%08x: activatewindow index=%s win=%s", win.window, index, win)
-            self.ewmh.clientmessage('_NET_ACTIVE_WINDOW', win)
+            self.root.activewindow = win
 
     def closewindow(self, stacking=True, index=None, window=None):
         """ Send an ICCCM WM_DELETE_WINDOW message to the window. """
@@ -37,22 +32,22 @@ class ClientCommand:
             win.delete()
 
     def adddesktop(self, name, index):
-        self.command.adddesktop(name, index)
+        self.root.adddesktop(name, index)
 
     def deletedesktop(self, index):
-        self.command.deletedesktop(index)
+        self.root.deletedesktop(index)
 
     def renamedesktop(self, index, name):
-        self.command.renamedesktop(index, name)
+        self.root.renamedesktop(index, name)
 
     def selectdesktop(self, index):
-        self.command.selectdesktop(index)
+        self.root.selectdesktop(index)
 
     def getdesktopnames(self):
-        return self.ewmh.desktopnames
+        return self.root.desktopnames
 
     def getwindowlist(self, stacking=True):
-        return self.ewmh.clientliststacking if stacking else self.ewmh.clientlist
+        return self.root.clientliststacking if stacking else self.root.clientlist
 
     def _getwindow(self, window=None, index=None, stacking=True):
         """ Return window selected by window (id) or index. The index
@@ -68,12 +63,8 @@ class ClientCommand:
             win = None
         return win
 
-class ClientInitMixin:
-    """ Common client init. """
-
-    def __init__(self, displayname=None):
-        self.display = display.Display(displayname)
-        log.debug('%s: connect display=%s', self.__class__.__name__, self.display)
-        self.root = window.RootWindow(self.display, self.display.defaultrootwindow)
-        self.ewmh = ewmh.EwmhClient(self.display, self.root)
-        self.command = command.FootCommandClient(self.display, self.root)
+def makedisplayroot(displayname=None):
+    displayobj = display.Display(displayname)
+    log.debug('Connect name=%s display=%s', displayname, displayobj)
+    root = window.ClientRoot(displayobj, displayobj.defaultrootwindow)
+    return displayobj, root

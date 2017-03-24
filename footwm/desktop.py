@@ -14,22 +14,25 @@ class Desktop:
         """ Desktops are built from root child windows. """
         self.display = display
         self.root = root
-        self._commander = command.FootCommandWM(self.display, self.root, self)
+        self._ewmhreader = ewmh.WmCommandReader(self.display, self.root, self)
+        self._footreader = command.WmCommandReader(self.display, self.root, self)
         self._unassigned = 'Unassigned'
         self._specials = [self._unassigned]
         # Keep the order of desktops: [desktop-name]
         self._desklist = self._specials[:]
         # Dict(desktop-name, [window])
         self._deskwins = {k: [] for k in self._desklist}
-        self.ewmh = ewmh.EwmhWM(self.display, self.root)
         self._makeunassigned()
         self._updatedesktophints()
         self._currentdesk = None
         self.selectdesktop(0)
 
-    def oncommand(self):
+    def handle_clientmessage(self, msgid, win):
+        self._ewmhreader.handle_clientmessage(msgid, win)
+
+    def handle_propertynotify(self, atom):
         """ Handle command received from a client. """
-        self._commander.action()
+        self._footreader.handle_propertynotify(atom)
 
     def adddesktop(self, name, index=0):
         """ Add a new desktop with name. Name must be unique. """
@@ -67,7 +70,6 @@ class Desktop:
                 self.redraw()
 
     def deletedesktop(self, index):
-        # Update ewmh desktop atoms.
         try:
             deskname = self._desklist[index]
         except IndexError:
@@ -140,7 +142,7 @@ class Desktop:
 
     def unmanagewindow(self, win):
         """ Remove the window from window lists. """
-        # Remove from our own managed lists, and from the ewmh properties.
+        # Remove from our managed lists.
         del self.root.children[win.window]
         self.stacklist.remove(win)
         doredraw = False
@@ -160,14 +162,14 @@ class Desktop:
             self.redraw()
 
     def _updatedesktophints(self):
-        """ Update desktop atoms, eg ewmh desktop number and desktop names. """
-        self.ewmh.desktopnames = self._desklist
+        """ Update desktop atoms. """
+        self.root.desktopnames = self._desklist
 
     def _updatewindowhints(self):
-        """ Update ewmh client window lists. """
+        """ Update client window lists. """
         # XXX Only update clientlist on newwindow, delwindow, changedesktop.
-        self.ewmh.clientlist = self.clientlist
-        self.ewmh.clientliststacking = self.stacklist
+        self.root.clientlist = self.clientlist
+        self.root.clientliststacking = self.stacklist
         log.debug("_updatewindowhints: stacklist=[{}]".format(' '.join('0x{:08x}'.format(x.window) for x in self.stacklist)))
 
     def raisewindow(self, win):
@@ -199,7 +201,7 @@ class Desktop:
             # TODO use a layout object to decide ideal window size.
             w.resize(self.root.geom)
             w.show()
-            self.ewmh.activewindow = w
+            self.root.activewindow = w
             log.debug('0x%08x: showing window=%s', w.window, w)
         # Hide every window that's not in the family of windows.
         for w in self.windowlist:

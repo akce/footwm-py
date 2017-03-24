@@ -12,11 +12,11 @@ from . import nestedarg
 
 log = logger.make(name=__name__)
 
-class FootShell(clientcmd.ClientInitMixin):
+class FootShell:
 
     def __init__(self, displayname=None):
-        super().__init__(displayname=displayname)
-        self.client = clientcmd.ClientCommand(self.display, self.root, self.ewmh, self.command)
+        display, root = clientcmd.makedisplayroot(displayname)
+        self.client = clientcmd.ClientCommand(root)
 
     def window_activate(self, args):
         """ Activate, bring to front, the window. """
