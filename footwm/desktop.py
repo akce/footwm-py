@@ -79,7 +79,7 @@ class Desktop:
             if deskname not in self._specials:
                 # Move windows from the deleted desktop to the unassigned desktop.
                 udesk = self._deskwins[self._unassigned]
-                for w in self.windowlist:
+                for w in self._deskwins[deskname]:
                     udesk.append(w)
                 del self._desklist[index]
                 del self._deskwins[deskname]
