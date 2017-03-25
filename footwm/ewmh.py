@@ -36,6 +36,7 @@ class Base:
                 '_NET_DESKTOP_NAMES',
                 '_NET_NUMBER_OF_DESKTOPS',
                 '_NET_SUPPORTING_WM_CHECK',
+                '_NET_WM_DESKTOP',
                 '_NET_WM_FULL_PLACEMENT',
                 '_NET_WM_NAME',
                 ]
@@ -57,6 +58,25 @@ class Base:
     def desktopnames(self, names):
         """ _NET_DESKTOP_NAMES """
         self.display.settextproperty(self, names, '_NET_DESKTOP_NAMES')
+
+class WmWindowClientWindowMixin(Base):
+    """ EWMH window support for client and window manager windows. """
+
+    @property
+    def desktop(self):
+        """ _NET_WM_DESKTOP """
+        return self.display.getcardinalproperty(self, '_NET_WM_DESKTOP')
+
+class WmWindowMixin(WmWindowClientWindowMixin):
+
+    @property
+    def desktop(self):
+        """ _NET_WM_DESKTOP """
+        return super().desktop
+
+    @desktop.setter
+    def desktop(self, index):
+        self.display.setcardinalproperty(self, '_NET_WM_DESKTOP', index)
 
 class ClientRootMixin(Base):
     """ EWMH root window support for client windows. """
@@ -102,7 +122,11 @@ class ClientRootMixin(Base):
     def currentdesktop(self, value):
         self.clientmessage('_NET_CURRENT_DESKTOP', l0=value)
 
-    def clientmessage(self, msg, win=None, l0=None):
+    def setwindowdesktop(self, win, desktopindex):
+        # We're setting pager source to unspecified (l1=0). This wm doesn't care about the source of this message, eg apps or pagers.
+        self.clientmessage('_NET_WM_DESKTOP', win=win, l0=desktopindex, l1=0)
+
+    def clientmessage(self, msg, win=None, l0=None, l1=None):
         """ Send an EWMH client message to the window manager.
         See EWMH: Root Window Properties (and Related Messages). """
         eventmask = xlib.InputEventMask.SubstructureNotify | xlib.InputEventMask.SubstructureRedirect
@@ -112,6 +136,8 @@ class ClientRootMixin(Base):
             ev.window = win.window
         if l0 is not None:
             ev.data.l[0] = l0
+        if l1 is not None:
+            ev.data.l[1] = l1
         ev.message_type = self.display.atom[msg]
         ev.send_event = True
         ev.format = 32
@@ -230,5 +256,7 @@ class WmCommandReader:
             # Do nothing else. We'll receive DestroyNotify etc if the client window is deleted.
         elif msgid == self.display.atom['_NET_CURRENT_DESKTOP']:
             self.desktop.selectdesktop(clientevent.data.l[0])
+        elif msgid == self.display.atom['_NET_WM_DESKTOP']:
+            self.desktop.setwindowdesktop(win, clientevent.data.l[0])
 
 __all__ = ClientRootMixin, WmRootMixin, WmCommandReader

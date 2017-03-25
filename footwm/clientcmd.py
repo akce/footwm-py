@@ -19,6 +19,7 @@ class ClientCommand:
 
     def activatewindow(self, stacking=True, index=None, window=None):
         """ Send an EWMH _NET_ACTIVE_WINDOW message to the window manager. """
+        # TODO account for window desktop. Either switch to desktop, or ignore request.
         win = self._getwindow(stacking=stacking, index=index, window=window)
         if win:
             log.debug("0x%08x: activatewindow index=%s win=%s", win.window, index, win)
@@ -30,6 +31,12 @@ class ClientCommand:
         if win:
             log.debug("0x%08x: closewindow index=%s win=%s", win.window, index, win)
             self.root.closewindow(win)
+
+    def setwindowdesktop(self, desktopindex, stacking=True, index=None, window=None):
+        win = self._getwindow(stacking=stacking, index=index, window=window)
+        if win:
+            log.debug("0x%08x: setwindowdesktop desktop=%d index=%s", win.window, desktopindex, index)
+            self.root.setwindowdesktop(win, desktopindex)
 
     def adddesktop(self, name, index):
         self.root.adddesktop(name, index)
@@ -47,7 +54,11 @@ class ClientCommand:
         return self.root.desktopnames
 
     def getwindowlist(self, stacking=True):
-        return self.root.clientliststacking if stacking else self.root.clientlist
+        # Filter on desktop since stacklist has all windows.
+        # XXX Optionally turn off desktop filter?
+        desktop = self.root.currentdesktop
+        winlist = self.root.clientliststacking if stacking else self.root.clientlist
+        return [w for w in winlist if w.desktop == desktop]
 
     def _getwindow(self, window=None, index=None, stacking=True):
         """ Return window selected by window (id) or index. The index

@@ -190,7 +190,7 @@ class WmRoot(ewmh.WmRootMixin, Base):
             window = WmTransient(self.display, windowid, self.children.get(transientfor, None))
         return window
 
-class WmWindowClientWindow(Base):
+class WmWindowClientWindow(ewmh.WmWindowClientWindowMixin, Base):
     """ Methods common to both WindowManager windows, and Client windows. """
 
     def __init__(self, display, windowid):
@@ -252,7 +252,7 @@ class WmWindowClientWindow(Base):
         log.debug('0x%08x: Get WM_STATE state=%s', self.window, state)
         return state
 
-class WmWindow(WmWindowClientWindow):
+class WmWindow(ewmh.WmWindowMixin, WmWindowClientWindow):
     """ Window functions as needed by the Window Manager. """
 
     def __init__(self, display, windowid, sizer):

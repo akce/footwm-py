@@ -25,6 +25,8 @@ class Desktop:
         self._makeunassigned()
         self._updatedesktophints()
         self._currentdesk = None
+        # This is always 0 since the current desktop is always put at the head of the list.
+        self.root.currentdesktop = 0
         self.selectdesktop(0)
 
     def handle_clientmessage(self, msgid, clientevent, win=None):
@@ -50,10 +52,11 @@ class Desktop:
     def selectdesktop(self, index):
         # Ensure that that the first (current) entry is not selected.
         #if index != 0 and index != -len(self._desklist):
+        log.debug('0x%08x: selectdesktop index=%d _currentdesk=%s', self.root.window, index, self._currentdesk)
         try:
             deskname = self._desklist[index]
         except IndexError:
-            pass
+            log.warning('0x%08x: desktop index=%d out of bounds desks=%s', self.root.window, index, str(self._desklist))
         else:
             if deskname != self._currentdesk:
                 # The desktop order will be changed.
@@ -79,8 +82,13 @@ class Desktop:
             if deskname not in self._specials:
                 # Move windows from the deleted desktop to the unassigned desktop.
                 udesk = self._deskwins[self._unassigned]
+                uindex = self._desklist.index(self._unassigned)
                 for w in self._deskwins[deskname]:
                     udesk.append(w)
+                    w.desktop = uindex
+                    # XXX Could be smarter here, the selectdesktop/redraw combo should do all the window hiding.
+                    if index == 0:
+                        w.hide()
                 del self._desklist[index]
                 del self._deskwins[deskname]
                 if index == 0:
@@ -113,6 +121,29 @@ class Desktop:
         """ Client list of windows in creation order. """
         return [window for windowid, window in self.root.children.items() if window in self.stacklist]
 
+    def setwindowdesktop(self, win, desktopindex):
+        try:
+            newdeskname = self._desklist[desktopindex]
+        except IndexError:
+            log.debug('0x%08x: setwindowdesktop failed. index=%d out of bounds', win.window, desktopindex)
+        else:
+            newdesk = self._deskwins[newdeskname]
+            doredraw = newdesk == self._desklist[0]
+            for dname, dwins in self._deskwins.items():
+                if win in dwins:
+                    dwins.remove(win)
+                    log.debug('0x%08x: removed from desktop name=%s', win.window, dname)
+                    if dname == self._desklist[0]:
+                        # Hide window here - redraw() yet doesn't handle windows still visible from an old desktop!!
+                        win.hide()
+                        doredraw = True
+            newdesk.insert(0, win)
+            log.debug('0x%08x: inserted into desktop name=%s', win.window, newdeskname)
+            win.desktop = desktopindex
+            self._updatewindowhints()
+            if doredraw:
+                self.redraw()
+
     @property
     def windowlist(self):
         """ Windows for the current desktop only. """
@@ -128,6 +159,7 @@ class Desktop:
             log.debug('0x%08x: importing window %s', window.window, window)
             # Manage imported windows.
             window.manage(xlib.InputEventMask.StructureNotify)
+            window.desktop = 0
 
     def managewindow(self, window):
         if not window.override_redirect:
@@ -173,6 +205,15 @@ class Desktop:
         self.root.clientlist = self.clientlist
         self.root.clientliststacking = self.stacklist
         log.debug("_updatewindowhints: stacklist=[{}]".format(' '.join('0x{:08x}'.format(x.window) for x in self.stacklist)))
+        # Update the current desktop for (potentially) *all* windows!
+        for i, dname in enumerate(self._desklist):
+            docheck = True
+            for w in self._deskwins[dname]:
+                # Optimise this check to save an EWMH w.desktop read for successive windows...
+                if docheck and i == w.desktop:
+                    break
+                docheck = False
+                w.desktop = i
 
     def raisewindow(self, win):
         """ Select the family of windows that belong to the window. """

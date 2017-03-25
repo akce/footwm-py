@@ -79,8 +79,6 @@ class WmCommandReader:
             elif command == 'window':
                 # Command modifies a window in some way.
                 # Copy to desktop
-                # Move to desktop
-                # Make global/sticky
                 # Remove from desktop
                 # Remove from all desktops
                 pass

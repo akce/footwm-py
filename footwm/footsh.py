@@ -32,6 +32,10 @@ class FootShell:
         for i, win in enumerate(wins):
             print('{: 2d} "{}"'.format(i, win.name))
 
+    def window_mv(self, args):
+        """ Move window to a different desktop. """
+        self.client.setwindowdesktop(desktopindex=args.desktop, index=args.window, stacking=not args.created)
+
     def desktop_ls(self, args):
         """ List desktops. """
         names = self.client.getdesktopnames()
@@ -84,6 +88,10 @@ def make_argparser(footsh):
         with wins('close', parents=[winparser], aliases=['c', 'x'], help='close window') as winclose:
             winclose.set_defaults(command=footsh.window_close)
             winclose.add_argument('index', type=int, default=1, help='index of window to use')
+        with wins('move', parents=[winparser], aliases=['m', 'mv'], help='move window to desktop') as winmv:
+            winmv.set_defaults(command=footsh.window_mv)
+            winmv.add_argument('desktop', type=int, help='index of desktop to move to. Default: %(default)s')
+            winmv.add_argument('--window', type=int, default=0, help='index of window to move. Default: %(default)s')
     return parser
 
 def main():
