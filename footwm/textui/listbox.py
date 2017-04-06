@@ -25,7 +25,7 @@ class Model:
     def __len__(self):
         return len(self.contents)
 
-class ListBox(common.WindowMixin):
+class ListBox(common.PanelWindowMixin):
 
     def __init__(self, parent, geom=None):
         self._reset()

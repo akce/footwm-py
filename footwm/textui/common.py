@@ -55,15 +55,19 @@ class WindowMixin:
         """ Redraw window to virtual buffer. """
         self._win.noutrefresh()
 
-class PanelWindowMixin:
+class PanelWindowMixin(WindowMixin):
 
     def __init__(self, parent, geom=None):
         super().__init__(parent, geom)
-        self._panel = panel.new_panel(self._win)
+        # Note that self._panel will be created in resize().
+        # That's because WindowMixin calls resize as part of __init__.
 
     def resize(self, geom):
         super().resize(geom)
-        self._panel.replace(self._win)
+        try:
+            self._panel.replace(self._win)
+        except AttributeError:
+            self._panel = panel.new_panel(self._win)
 
     def draw(self):
         super().draw()
