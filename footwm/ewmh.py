@@ -59,6 +59,15 @@ class Base:
         """ _NET_DESKTOP_NAMES """
         self.display.settextproperty(self, names, '_NET_DESKTOP_NAMES')
 
+    @property
+    def name(self):
+        try:
+            n = self.display.gettextproperty(self, '_NET_WM_NAME')[0]
+        except TypeError:
+            # Should fallback to ICCCM WM_NAME property.
+            n = super().name
+        return n
+
 class WmWindowClientWindowMixin(Base):
     """ EWMH window support for client and window manager windows. """
 

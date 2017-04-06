@@ -102,17 +102,15 @@ class Base:
             self.override_redirect, self.geom, self.map_state = self.display.getwindowattributes(self.window)
         except (TypeError, ValueError) as e:
             raise WindowError('0x%08x: getwindowattributes failed %s', self.window, e)
-        # XXX Premature optimisation? Just use wm_name....
-        self.name = self.wm_name
+
+    @property
+    def name(self):
+        #log.debug('0x%08x: Get WM_NAME name=%s status=%d', self.window, name)
+        return self.display.getwmname(self)
 
     def manage(self, eventmask):
         # watch, maintain, manage, control etc.
         self.display.selectinput(self, eventmask)
-
-    @property
-    def wm_name(self):
-        #log.debug('0x%08x: Get WM_NAME name=%s status=%d', self.window, name)
-        return self.display.getwmname(self)
 
     def __str__(self):
         args = [
