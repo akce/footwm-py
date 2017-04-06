@@ -34,7 +34,7 @@ class ListBox(common.WindowMixin):
 
     def _update_scroll(self):
         # Ensure _scroll is at least 1, no point having a zero scroll value.
-        self._scroll = max(int(self.h / 2), 1)
+        self._scroll = max(int(self._geom.h / 2), 1)
 
     def _reset(self):
         self._viewport_index = 0
@@ -48,15 +48,16 @@ class ListBox(common.WindowMixin):
     def draw(self):
         # Check show/hide state first.
         self._win.erase()
+        geom = self._geom
         # Get our slice of display items, then display them.
-        sl = self.contents[self._viewport_index:self._viewport_index + self.h]
+        sl = self.contents[self._viewport_index:self._viewport_index + geom.h]
         #log.debug('listbox.draw len(slice)=%s h=%s viewport_index=%s', len(sl), self.h, self._viewport_index)
         for i, label in enumerate(sl):
             if i == (self._selected_index - self._viewport_index):
                 colour = curses.color_pair(0) | curses.A_REVERSE
             else:
                 colour = curses.color_pair(0)
-            self._win.addstr(i, 0, util.clip_end(label, self.w), colour)
+            self._win.addstr(i, 0, util.clip_end(label, geom.w), colour)
         super().draw()
 
     def down(self):
@@ -84,18 +85,19 @@ class ListBox(common.WindowMixin):
     def _update_viewport(self):
         """ Calculates _viewport_index position w/respect to screen LINES. Scroll the viewport if needed. """
         # Is the selected item visible on screen?
-        log.debug('update_viewport old listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', self._geom, self._selected_index, self._viewport_index, self._scroll)
+        geom = self._geom
+        log.debug('update_viewport old listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self._selected_index, self._viewport_index, self._scroll)
         # offset makes sure that the selected item is visible on screen.
         # This calc only works because self._scroll is h/2. Doing the subtraction accounts for case where self.h == 1.
         # Could probably do this nicer but it works for now..
-        offset = self.h - self._scroll
+        offset = geom.h - self._scroll
         if self._selected_index < self._viewport_index:
             # Selected item is above viewport, try and centre the item on screen.
             self._viewport_index = max(self._selected_index - offset, 0)
-        elif self._selected_index >= (self._viewport_index + self.h):
+        elif self._selected_index >= (self._viewport_index + geom.h):
             # Selected item is below viewport+pageheight, try and centre the item on screen.
             self._viewport_index = self._selected_index - offset
-        log.debug('update_viewport new listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', self._geom, self._selected_index, self._viewport_index, self._scroll)
+        log.debug('update_viewport new listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self._selected_index, self._viewport_index, self._scroll)
 
     @property
     def selected(self):

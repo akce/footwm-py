@@ -8,13 +8,29 @@ class Geometry:
 
     def __init__(self, x=None, y=None, w=None, h=None):
         # Default to max values if not supplied.
-        self.x = x or 0
-        self.y = y or 0
-        self.w = w or curses.COLS
-        self.h = h or curses.LINES
+        self._x = x or 0
+        self._y = y or 0
+        self._w = w or curses.COLS
+        self._h = h or curses.LINES
+
+    @property
+    def x(self):
+        return self._x
+
+    @property
+    def y(self):
+        return self._y
+
+    @property
+    def h(self):
+        return self._h
+
+    @property
+    def w(self):
+        return self._w
 
     def __str__(self):
-        return 'Geometry(x={}, y={}, w={}, h={})'.format(self.x, self.y, self.w, self.h)
+        return 'Geometry(x={}, y={}, w={}, h={})'.format(self._x, self._y, self._w, self._h)
 
 class WindowMixin:
 
@@ -22,11 +38,13 @@ class WindowMixin:
         self.parent = parent
         self._win = None
         if geom is None:
-            y, x = parent.getbegyx()
-            h, w = parent.getmaxyx()
-            self.resize(Geometry(x=x, y=y, w=w, h=h))
+            self.resize(parent.geom)
         else:
             self.resize(geom)
+
+    @property
+    def geom(self):
+        return self._geom
 
     def resize(self, geom):
         self._geom = geom
@@ -36,22 +54,6 @@ class WindowMixin:
     def draw(self):
         """ Redraw window to virtual buffer. """
         self._win.noutrefresh()
-
-    @property
-    def x(self):
-        return self._geom.x
-
-    @property
-    def y(self):
-        return self._geom.y
-
-    @property
-    def h(self):
-        return self._geom.h
-
-    @property
-    def w(self):
-        return self._geom.w
 
 class PanelWindowMixin:
 

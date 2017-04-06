@@ -5,6 +5,7 @@ import threading
 
 # Local modules.
 from .. import log as logmodule
+from . import common
 
 log = logmodule.make(name=__name__)
 
@@ -61,11 +62,11 @@ class Screen(object):
     def subwin(self, h, w, y, x):
         return self.stdscr.subwin(h, w, y, x)
 
-    def getbegyx(self):
-        return self.stdscr.getbegyx()
-
-    def getmaxyx(self):
-        return self.stdscr.getmaxyx()
+    @property
+    def geom(self):
+        y, x = self.stdscr.getbegyx()
+        h, w = self.stdscr.getmaxyx()
+        return common.Geometry(x=x, y=y, w=w, h=h)
 
     @property
     def running(self):
