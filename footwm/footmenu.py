@@ -17,13 +17,12 @@ def xinit(displayname=None):
     client = clientcmd.ClientCommand(root)
     return client, display, root
 
-class WindowApp:
+class AppMixin:
 
     def __init__(self, client, showcurrent, msgduration=1.2):
-        offset = 0 if showcurrent else 1
         self.client = client
+        self._offset = 0 if showcurrent else 1
         self._msgduration = msgduration
-        self.windows = self.client.getwindowlist()[offset:]
         self.scr = screen.Screen(self)
         # Command mode keymap.
         self.eventmap = {
@@ -41,16 +40,11 @@ class WindowApp:
             ord('J'):		self.pagedown,
             }
 
-    def _initview(self):
+    def run(self):
         self.scr.init()
-        columns = ['Resource', 'Class', 'Title']
-        model = listbox.Model(rows=[[w.resourcename, w.resourceclass, w.name] for w in self.windows], columns=columns)
-        self.listbox = listbox.ListBox(self.scr, model=model)
+        self.listbox = listbox.ListBox(self.scr, model=self._makemodel())
         self.scr.windows = [self.listbox]
         self.scr.draw()
-
-    def run(self):
-        self._initview()
         self.scr.run()
 
     def stop(self):
@@ -80,6 +74,41 @@ class WindowApp:
             func()
             self.scr.draw()
 
+class DesktopApp(AppMixin):
+
+    def __init__(self, client, showcurrent, msgduration=1.2):
+        super().__init__(client, showcurrent, msgduration)
+        self.desktops = self.client.getdesktopnames()[self._offset:]
+
+    def _makemodel(self):
+        return listbox.Model(rows=[[d] for d in self.desktops])
+
+    def activateselection(self):
+        deskname = self.desktops[self.listbox.selected]
+        msg = msgwin.Message(lines=[deskname], parent=self.scr, title='Selecting')
+        self.scr.windows.append(msg)
+        self.scr.draw()
+        time.sleep(self._msgduration)
+        self.scr.windows.remove(msg)
+        self.client.selectdesktop(self.listbox.selected)
+        self.scr.draw()
+        self.stop()
+
+    def closeselection(self):
+        deskname = self.desktops[self.listbox.selected]
+        self.client.deletedesktop(self.listbox.selected)
+        self.stop()
+
+class WindowApp(AppMixin):
+
+    def __init__(self, client, showcurrent, msgduration=1.2):
+        super().__init__(client, showcurrent, msgduration)
+        self.windows = self.client.getwindowlist()[self._offset:]
+
+    def _makemodel(self):
+        columns = ['Resource', 'Class', 'Title']
+        return listbox.Model(rows=[[w.resourcename, w.resourceclass, w.name] for w in self.windows], columns=columns)
+
     def activateselection(self):
         win = self.windows[self.listbox.selected]
         msg = msgwin.Message(lines=[win.name], parent=self.scr, title='Activating')
@@ -105,18 +134,23 @@ def windowmenu(args):
         app.close()
 
 def desktopmenu(args):
-    pass
+    client, display, root = xinit(displayname=args.displayname)
+    app = DesktopApp(client, showcurrent=args.showcurrent, msgduration=args.msgduration)
+    try:
+        app.run()
+    finally:
+        app.close()
 
 def parse_args():
     dispparser = argparse.ArgumentParser(add_help=False)
     dispparser.add_argument('--displayname', help='X display name.')
     dispparser.add_argument('--msgduration', default=1.2, type=float, help='Seconds to show message window before actioning')
+    dispparser.add_argument('--showcurrent', default=False, action='store_true', help='Show current desktop/window')
 
     parser = argparse.ArgumentParser()
     commands = nestedarg.NestedSubparser(parser.add_subparsers())
     with commands('windows', aliases=['w', 'win'], parents=[dispparser], help='windows only menu') as c:
         c.set_defaults(command=windowmenu)
-        c.add_argument('--showcurrent', default=False, action='store_true', help='Show current window')
     with commands('desktops', aliases=['d', 'desk'], parents=[dispparser], help='desktops only menu') as c:
         c.set_defaults(command=desktopmenu)
     return parser.parse_args()
