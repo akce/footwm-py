@@ -11,12 +11,13 @@ log = logmodule.make(name=__name__)
 class Model:
     """ The data that the listbox will display. """
 
-    def __init__(self, showindex=True, showheaders=True, rows=None, columns=None):
+    def __init__(self, showindex=True, showheader=True, rows=None, columns=None):
         # Store the original columns and rows before any filtering.
         self._rows = rows or []
         self._columns = columns or []
         self.showindex = showindex
-        self.showheaders = showheaders and self.columns
+        # Can only show the column header if there are column names.
+        self.showheader = showheader and self.columns
 
     @property
     def columns(self):
@@ -60,15 +61,14 @@ class ListBox(common.PanelWindowMixin):
         self._win.box()
         geom = self._geom
         borders = 2
-        headerlines = 2
+        headerlines = 2 if self.model.showheader else 0
         maxrows = geom.h - borders - headerlines
         # Get our slice of display items, then display them.
         sl = self.model.rows[self._viewport_index:self._viewport_index + maxrows]
         ## Calculate the max width of each row.
         # Note that the column headers are included in this calculation!
         rowmaxes = []
-        # Add an index column.
-        columns = self.model.columns
+        columns = self.model.columns if self.model.showheader else []
         for i, row in enumerate([columns] + sl, 1):
             for j, col in enumerate(row):
                 length = len(col)
@@ -92,22 +92,23 @@ class ListBox(common.PanelWindowMixin):
             xpos += 2
 
         ## Draw column headers.
-        ybase += 1
-        xpos = xbase
-        for rm, columnname in zip(rowmaxes, columns):
-            self._win.addstr(ybase, xpos, columnname, headercolour)
-            xpos += rm + 3
-        ## Draw column header divider line.
-        ybase += 1
-        self._win.addch(ybase, geom.x, curses.ACS_LTEE)
-        xpos = 1
-        self._win.hline(ybase, xpos, curses.ACS_HLINE, geom.w - borders)
-        xpos = xbase
-        for rm in rowmaxes[:-1]:
-            xpos += rm + 1
-            self._win.addch(ybase, xpos, curses.ACS_PLUS)
-            xpos += 2
-        self._win.addch(ybase, geom.w - 1, curses.ACS_RTEE)
+        if self.model.showheader:
+            ybase += 1
+            xpos = xbase
+            for rm, columnname in zip(rowmaxes, columns):
+                self._win.addstr(ybase, xpos, columnname, headercolour)
+                xpos += rm + 3
+            ## Draw column header divider line.
+            ybase += 1
+            self._win.addch(ybase, geom.x, curses.ACS_LTEE)
+            xpos = 1
+            self._win.hline(ybase, xpos, curses.ACS_HLINE, geom.w - borders)
+            xpos = xbase
+            for rm in rowmaxes[:-1]:
+                xpos += rm + 1
+                self._win.addch(ybase, xpos, curses.ACS_PLUS)
+                xpos += 2
+            self._win.addch(ybase, geom.w - 1, curses.ACS_RTEE)
 
         ## Draw row contents.
         #log.debug('listbox.draw len(slice)=%s h=%s viewport_index=%s', len(sl), self.h, self._viewport_index)
