@@ -1,0 +1,8 @@
+#! /usr/bin/env python3
+#
+# footmenu run script.
+#
+
+from footwm import footmenu
+
+footmenu.main()
