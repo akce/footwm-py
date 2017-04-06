@@ -2,6 +2,7 @@
 
 # Python standard modules.
 import argparse
+import collections
 import curses
 import time
 
@@ -16,6 +17,12 @@ def xinit(displayname=None):
     display, root = clientcmd.makedisplayroot(displayname)
     client = clientcmd.ClientCommand(root)
     return client, display, root
+
+class WindowRow(collections.namedtuple('WindowRow', ['Resource', 'Class', 'Title'])):
+
+    @classmethod
+    def columns(cls):
+        return list(cls._fields)
 
 class WindowApp:
 
@@ -43,9 +50,7 @@ class WindowApp:
 
     def _initview(self):
         self.scr.init()
-        self.model = listbox.Model(contents=[w.name for w in self.windows])
-        self.listbox = listbox.ListBox(self.scr)
-        self.listbox.contents = self.model
+        self.listbox = listbox.ListBox(self.scr, model=listbox.Model(rows=[WindowRow(*w.wm_class, Title=w.name) for w in self.windows], columns=WindowRow.columns()))
         self.scr.windows = [self.listbox]
         self.scr.draw()
 
