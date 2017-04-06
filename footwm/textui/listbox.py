@@ -62,15 +62,17 @@ class ListBox(common.PanelWindowMixin):
         ## Calculate the max width of each row.
         # Note that the column headers are included in this calculation!
         rowmaxes = []
-        for row in [self.model.columns] + sl:
-            for i, col in enumerate(row):
-                length = len(row[i])
+        # Add an index column.
+        columns = ["#"] + self.model.columns
+        for i, row in enumerate([columns] + sl, 1):
+            for j, col in enumerate(["{:2d}".format(i)] + row):
+                length = len(col)
                 try:
-                    oldmax = rowmaxes[i]
+                    oldmax = rowmaxes[j]
                 except IndexError:
                     rowmaxes.append(length)
                 else:
-                    rowmaxes[i] = max(rowmaxes[i], length)
+                    rowmaxes[j] = max(rowmaxes[j], length)
 
         ## Draw the verticle column divider lines.
         xbase = 2
@@ -87,8 +89,8 @@ class ListBox(common.PanelWindowMixin):
         ## Draw column headers.
         ybase += 1
         xpos = xbase
-        for rm, header in zip(rowmaxes, self.model.columns):
-            self._win.addstr(ybase, xpos, header, headercolour)
+        for rm, columnname in zip(rowmaxes, columns):
+            self._win.addstr(ybase, xpos, columnname, headercolour)
             xpos += rm + 3
         ## Draw column header divider line.
         ybase += 1
@@ -111,7 +113,7 @@ class ListBox(common.PanelWindowMixin):
             else:
                 textcolour = curses.color_pair(0)
             xpos = xbase
-            for rowmax, col in zip(rowmaxes, row):
+            for rowmax, col in zip(rowmaxes, ["{:2d}".format(i + 1)] + row):
                 text = util.clip_end(col, geom.w - 1)
                 self._win.addstr(i + ybase, xpos, text, textcolour)
                 xpos += rowmax + 3

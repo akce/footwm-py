@@ -234,6 +234,18 @@ class WmWindowClientWindow(ewmh.WmWindowClientWindowMixin, Base):
 
     @property
     @utils.memoise
+    def resourcename(self):
+        ret, _ = self.wm_class
+        return ret
+
+    @property
+    @utils.memoise
+    def resourceclass(self):
+        _, ret = self.wm_class
+        return ret
+
+    @property
+    @utils.memoise
     def wm_class(self):
         """ WM_CLASS is a tuple of resource name & class. See ICCCM 4.1.2.5 """
         return self.display.getclasshint(self)
