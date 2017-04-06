@@ -11,20 +11,25 @@ log = logmodule.make(name=__name__)
 class Model:
     """ The data that the listbox will display. """
 
-    def __init__(self, rows=None, columns=None):
-        self.rows = rows or []
-        self.columns = columns
-        self.views = []
+    def __init__(self, showindex=True, showheaders=True, rows=None, columns=None):
+        # Store the original columns and rows before any filtering.
+        self._rows = rows or []
+        self._columns = columns or []
+        self.showindex = showindex
+        self.showheaders = showheaders and self.columns
 
-    def __getitem__(self, index):
-        """ Return a list row. """
-        return self.rows[index]
+    @property
+    def columns(self):
+        cols = ([' # '] if self.showindex else []) + self._columns
+        return cols
 
-    def __setitem__(self, index, row):
-        self.rows[index] = row
-
-    def __len__(self):
-        return len(self.rows)
+    @property
+    def rows(self):
+        if self.showindex:
+            ret = [["{:2d}".format(i)] + row for i, row in enumerate(self._rows, 1)]
+        else:
+            ret = self._rows
+        return ret
 
 class ListBox(common.PanelWindowMixin):
 
@@ -63,9 +68,9 @@ class ListBox(common.PanelWindowMixin):
         # Note that the column headers are included in this calculation!
         rowmaxes = []
         # Add an index column.
-        columns = ["#"] + self.model.columns
+        columns = self.model.columns
         for i, row in enumerate([columns] + sl, 1):
-            for j, col in enumerate(["{:2d}".format(i)] + row):
+            for j, col in enumerate(row):
                 length = len(col)
                 try:
                     oldmax = rowmaxes[j]
@@ -113,7 +118,7 @@ class ListBox(common.PanelWindowMixin):
             else:
                 textcolour = curses.color_pair(0)
             xpos = xbase
-            for rowmax, col in zip(rowmaxes, ["{:2d}".format(i + 1)] + row):
+            for rowmax, col in zip(rowmaxes, row):
                 text = util.clip_end(col, geom.w - 1)
                 self._win.addstr(i + ybase, xpos, text, textcolour)
                 xpos += rowmax + 3
