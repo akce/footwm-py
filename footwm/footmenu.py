@@ -3,6 +3,7 @@
 # Python standard modules.
 import argparse
 import curses
+import os
 import time
 
 # Local modules.
@@ -30,6 +31,9 @@ class AppMixin:
             ord('a'):		self.activateselection,
             ord('x'):		self.closeselection,
             ord('q'):		self.stop,
+            # Escape == 27.
+            27:			self.stop,
+            # Enter == 10.
             10:			self.activateselection,
             curses.KEY_UP:	self._model.up,
             ord('k'):		self._model.up,
@@ -153,11 +157,15 @@ def desktopmenu(args):
     finally:
         app.close()
 
+def setescapedelay(args):
+    os.environ['ESCDELAY'] = str(args.escapedelay)
+
 def parse_args():
     dispparser = argparse.ArgumentParser(add_help=False)
     dispparser.add_argument('--displayname', help='X display name.')
     dispparser.add_argument('--msgduration', default=1.2, type=float, help='Seconds to show message window before actioning')
     dispparser.add_argument('--showcurrent', default=False, action='store_true', help='Show current desktop/window')
+    dispparser.add_argument('--escapedelay', default=25, type=int, help='Set curses escape delay')
 
     parser = argparse.ArgumentParser()
     commands = nestedarg.NestedSubparser(parser.add_subparsers())
@@ -169,4 +177,5 @@ def parse_args():
 
 def main():
     args = parse_args()
+    setescapedelay(args)
     args.command(args)
