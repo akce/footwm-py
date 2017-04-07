@@ -1,6 +1,8 @@
 export PYTHONPATH=.
+export PATH=./bin:$PATH
 
 k
-./bin/footkeys &
-./bin/footwm --outfile test.log --logspec footwm.desktop:debug,footwm.display:debug,footwm.footwm:debug,footwm.window:debug &
+footkeys &
+footrun d start &
+footwm --outfile test.log --logspec footwm.desktop:debug,footwm.display:debug,footwm.footwm:debug,footwm.window:debug &
 xterm
