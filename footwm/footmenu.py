@@ -28,7 +28,7 @@ class AppMixin:
         # Command mode keymap.
         self.eventmap = {
             ord('a'):		self.activateselection,
-            ord('c'):		self.closeselection,
+            ord('x'):		self.closeselection,
             ord('q'):		self.stop,
             10:			self.activateselection,
             curses.KEY_UP:	self._model.up,
