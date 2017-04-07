@@ -17,6 +17,10 @@ class ClientCommand:
     def __init__(self, root):
         self.root = root
 
+    @property
+    def activewindow(self):
+        return self.root.activewindow
+
     def activatewindow(self, stacking=True, index=None, window=None):
         """ Send an EWMH _NET_ACTIVE_WINDOW message to the window manager. """
         # TODO account for window desktop. Either switch to desktop, or ignore request.
@@ -52,6 +56,10 @@ class ClientCommand:
 
     def getdesktopnames(self):
         return self.root.desktopnames
+
+    @property
+    def currentdesktop(self):
+        return self.root.currentdesktop
 
     def getwindowlist(self, stacking=True):
         # Filter on desktop since stacklist has all windows.

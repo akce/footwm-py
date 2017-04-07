@@ -73,7 +73,9 @@ class DesktopApp(AppMixin):
         columns = [listbox.ListColumn(name='desk', label="Desktop"),
                    listbox.ListColumn(name='desknum', visible=False, label="Number"),
             ]
-        return listbox.Model(columns=columns, rows=[{'desk': d, 'desknum': i} for i, d in enumerate(desktops, self._offset)])
+        model = listbox.Model(columns=columns, rows=[{'desk': d, 'desknum': i} for i, d in enumerate(desktops, self._offset)])
+        model.selectedindex = self.client.currentdesktop
+        return model
 
     def activateselection(self):
         row = self._model.selected
@@ -106,7 +108,15 @@ class WindowApp(AppMixin):
                    listbox.ListColumn(name='title', label='Title'),
                    listbox.ListColumn(name='wid', label='Window', visible=False),
             ]
-        return listbox.Model(rows=[{'res': w.resourcename, 'cls': w.resourceclass, 'title': w.name, 'wid': w.window} for w in windows], columns=columns)
+        model = listbox.Model(rows=[{'res': w.resourcename, 'cls': w.resourceclass, 'title': w.name, 'wid': w.window} for w in windows], columns=columns)
+        aw = self.client.activewindow
+        for i, w in enumerate(windows):
+            if w.window == aw.window:
+                break
+        else:
+            i = 0
+        model.selectedindex = i
+        return model
 
     def activateselection(self):
         row = self._model.selected
