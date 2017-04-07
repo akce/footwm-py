@@ -85,7 +85,7 @@ class DesktopApp(AppMixin):
         columns = [listbox.ListColumn(name='desk', label="Desktop"),
                    listbox.ListColumn(name='desknum', visible=False, label="Number"),
             ]
-        return listbox.Model(columns=columns, rows=[{'desk': d, 'desknum': i} for i, d in enumerate(desktops)])
+        return listbox.Model(columns=columns, rows=[{'desk': d, 'desknum': i} for i, d in enumerate(desktops, self._offset)])
 
     def activateselection(self):
         row = self._model.selected
