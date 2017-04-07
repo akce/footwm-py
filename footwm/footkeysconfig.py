@@ -27,9 +27,9 @@ keyconfig.addkey('F8', action=do(client.deletedesktop, index=0))
 
 # Menus.
 # Window select menu.
-keyconfig.addkey('F9', action=do(run, " ".join([TERMINAL, '-e', 'footmenu', 'w'])))
+keyconfig.addkey('F9', action=do(run, TERMINAL + ' -e footmenu w'))
 # Desktop select menu.
-keyconfig.addkey('F10', action=do(run, " ".join([TERMINAL, '-e', 'footmenu', 'd'])))
+keyconfig.addkey('F10', action=do(run, TERMINAL + ' -e footmenu d'))
 
 # ALT + ENTER : Runs an xterm. Requires a running footrun daemon.
 keyconfig.addkey('Return', requiremods=[alt], action=do(run, TERMINAL))
