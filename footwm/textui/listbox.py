@@ -72,17 +72,6 @@ class Model:
     def selected(self):
         return self._rows[self.selectedindex]
 
-#    @selected.setter
-#    def selected(self, newindex):
-#        try:
-#            item = self.model.rows[newindex]
-#        except IndexError:
-#            log.error('ListBox.selected failed. index=%d out of range=%d!', newindex, len(self.model.rows))
-#        else:
-#            log.debug('newindex=%s oldindex=%s newlabel=%s', newindex, self.model.selectedindex, item)
-#            self.model.selectedindex = newindex
-#            self._update_viewport()
-
     def up(self):
         self.view.up()
 
