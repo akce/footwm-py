@@ -7,7 +7,6 @@ Copyright (c) 2016 Akce
 import functools
 import itertools
 import operator
-import os
 
 # Local modules.
 from . import clientcmd
