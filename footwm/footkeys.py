@@ -187,13 +187,14 @@ def parseargs():
 def main():
     args = parseargs()
     fk = FootKeys(args.display)
-    # TODO load settings from config file or use defaults.
     with fk.config() as keyconfig:
         # Create a client object and add it into the configs
         # namespace. One of these is handy and would be used by every
         # config.
         gl = globals().copy()
         gl['client'] = clientcmd.ClientCommand(fk.root)
+        gl['akce'] = functools.partial
+        gl['do'] = functools.partial
         config.loadconfig(getconfigfilename(args), gl, locals())
     try:
         xevent.run(fk.display, fk.eventhandlers)
