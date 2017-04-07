@@ -49,7 +49,10 @@ class Model:
     def rows(self, r):
         indexname = self._indexcolumn.name
         keyname = self._keycolumn.name
-        self._rows = [dict([[keyname, i], [indexname, "{:2d}".format(i + 1)]] + list(rowdict.items())) for i, rowdict in enumerate(r or [[]])]
+        try:
+            self._rows = [dict([[keyname, i], [indexname, "{:2d}".format(i + 1)]] + list(rowdict.items())) for i, rowdict in enumerate(r)]
+        except AttributeError:
+            self._rows = []
 
     def _iscolumnvisible(self, name):
         visible = False
