@@ -11,6 +11,7 @@ import stat
 import sys
 
 # Local modules.
+from . import config
 from . import jsonrpc
 from . import log as loghelp
 from . import nestedarg
@@ -18,6 +19,8 @@ from . import runner
 from . import selectloop
 
 log = loghelp.make(name=__name__)
+
+SOCKNAME = 'run.sock'
 
 class SelectRunner:
 
@@ -63,7 +66,7 @@ def clidaemonstart(args):
 
 def run(cmdline, address=None):
     if address is None:
-        address = getdefaultaddress()
+        address = config.getuserconfig(SOCKNAME)
     remote = selectloop.StreamClient(address=address, family=socket.AF_UNIX)
     remote.connect()
     runner = jsonrpc.RemoteObject(['run'], postfunc=remote.post)
@@ -72,14 +75,11 @@ def run(cmdline, address=None):
 def clirun(args):
     run(address=args.sockname, cmdline=' '.join('"{}"'.format(x) for x in args.args))
 
-def getdefaultaddress():
-    return os.path.join(os.environ['HOME'], '.foot', 'run.sock')
-
 def makeargparser():
     parser = argparse.ArgumentParser()
 
     connparser = argparse.ArgumentParser(add_help=False)
-    connparser.add_argument('--sockname', default=getdefaultaddress(), help='unix socket filename. default: %(default)s')
+    connparser.add_argument('--sockname', default=config.getuserconfig(SOCKNAME), help='unix socket filename. default: %(default)s')
 
     commands = nestedarg.NestedSubparser(parser.add_subparsers())
     with commands('daemon', aliases=['d'], parents=[connparser], help='app running daemon commands') as c:

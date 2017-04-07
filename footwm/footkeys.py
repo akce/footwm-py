@@ -11,6 +11,7 @@ import os
 
 # Local modules.
 from . import clientcmd
+from . import config
 from . import log as logger
 from . import kb
 from . import xevent
@@ -172,22 +173,8 @@ def getconfigfilename(args):
     except AttributeError:
         pass
     if cf is None:
-        # Test if there's config file in the home directory.
-        name = 'footkeysconfig.py'
-        homefile = os.path.join(os.environ['HOME'], ".{}".format(name))
-        if os.path.isfile(homefile):
-            cf = homefile
-        else:
-            # Fallback to the sample config footkeysconfig.py in the source directory.
-            cf = os.path.join(os.path.split(os.path.realpath(__file__))[0], name)
+        cf = config.getconfigwithfallback('footkeysconfig.py')
     return cf
-
-def loadconfig(filename, globals_=None, locals_=None):
-    gs = globals() if globals_ is None else globals_
-    ls = locals() if locals_ is None else locals_
-    with open(filename) as f:
-        codeobj = compile(f.read(), filename, 'exec')
-        exec(codeobj, gs, ls)
 
 def parseargs():
     import argparse
@@ -207,7 +194,7 @@ def main():
         # config.
         gl = globals().copy()
         gl['client'] = clientcmd.ClientCommand(fk.root)
-        loadconfig(getconfigfilename(args), gl, locals())
+        config.loadconfig(getconfigfilename(args), gl, locals())
     try:
         xevent.run(fk.display, fk.eventhandlers)
     finally:
