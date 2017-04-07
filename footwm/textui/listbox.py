@@ -21,19 +21,12 @@ class Model:
         self.columns = columns
         self._showheader = showheader
         self.selectedindex = 0
-        self.views = []
+        self.view = None
 
     @property
     def showheader(self):
         # Can only show the column header if there are some visible columns.
         return self._showheader and self.visiblecolumns
-
-    def attachview(self, view):
-        self.views.append(view)
-
-    def updateviews(self):
-        for v in self.views:
-            v.draw()
 
     @property
     def columns(self):
@@ -45,7 +38,7 @@ class Model:
 
     @property
     def visiblecolumns(self):
-        """ Columns to be displayed by views. """
+        """ Columns to be displayed by view. """
         return [col for col in self.columns if col.visible]
 
     @property
@@ -88,20 +81,16 @@ class Model:
 #            self._update_viewport()
 
     def up(self):
-        for v in self.views:
-            v.up()
+        self.view.up()
 
     def down(self):
-        for v in self.views:
-            v.down()
+        self.view.down()
 
     def pageup(self):
-        for v in self.views:
-            v.pageup()
+        self.view.pageup()
 
     def pagedown(self):
-        for v in self.views:
-            v.pagedown()
+        self.view.pagedown()
 
 class ListColumn:
     """ Column display specification. """

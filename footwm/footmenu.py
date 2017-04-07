@@ -24,44 +24,32 @@ class AppMixin:
         self._offset = 0 if showcurrent else 1
         self._msgduration = msgduration
         self.scr = screen.Screen(self)
+        self._model = self._makemodel()
         # Command mode keymap.
         self.eventmap = {
             ord('a'):		self.activateselection,
             ord('c'):		self.closeselection,
             ord('q'):		self.stop,
             10:			self.activateselection,
-            curses.KEY_UP:	self.up,
-            ord('k'):		self.up,
-            curses.KEY_DOWN:	self.down,
-            ord('j'):		self.down,
-            curses.KEY_PPAGE:	self.pageup,
-            ord('K'):		self.pageup,
-            curses.KEY_NPAGE:	self.pagedown,
-            ord('J'):		self.pagedown,
+            curses.KEY_UP:	self._model.up,
+            ord('k'):		self._model.up,
+            curses.KEY_DOWN:	self._model.down,
+            ord('j'):		self._model.down,
+            curses.KEY_PPAGE:	self._model.pageup,
+            ord('K'):		self._model.pageup,
+            curses.KEY_NPAGE:	self._model.pagedown,
+            ord('J'):		self._model.pagedown,
             }
 
     def run(self):
         self.scr.init()
-        self._model = self._makemodel()
-        self._model.attachview(listbox.ListBox(model=self._model, parent=self.scr))
-        self.scr.windows = self._model.views[:]
+        self._model.view = listbox.ListBox(model=self._model, parent=self.scr)
+        self.scr.windows = [self._model.view]
         self.scr.draw()
         self.scr.run()
 
     def stop(self):
         self.scr.running = False
-
-    def up(self):
-        self._model.up()
-
-    def down(self):
-        self._model.down()
-
-    def pageup(self):
-        self._model.pageup()
-
-    def pagedown(self):
-        self._model.pagedown()
 
     def close(self):
         self.scr.close()
