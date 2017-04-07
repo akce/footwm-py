@@ -162,9 +162,6 @@ class FootKeys:
         """ X server has had a keyboard mapping changed. Update our keyboard layer. """
         self._rebuild()
 
-def nullop(*args, **kwargs):
-    print('XXX')
-
 def getconfigfilename(args):
     cf = None
     try:
