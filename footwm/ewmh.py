@@ -63,7 +63,7 @@ class Base:
     def name(self):
         try:
             n = self.display.gettextproperty(self, '_NET_WM_NAME')[0]
-        except TypeError:
+        except (IndexError, TypeError):
             # Should fallback to ICCCM WM_NAME property.
             n = super().name
         return n

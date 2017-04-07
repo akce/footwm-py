@@ -73,7 +73,10 @@ class ClientCommand:
         is then either based on stacking or creation order depending
         on whether stacking is True. """
         if index is not None:
-            win = self.getwindowlist(stacking)[index]
+            try:
+                win = self.getwindowlist(stacking)[index]
+            except IndexError:
+                win = None
         elif window is not None:
             win = self.root.children[window]
             assert win.window == window
