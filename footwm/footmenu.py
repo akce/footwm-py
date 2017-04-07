@@ -42,8 +42,9 @@ class AppMixin:
 
     def run(self):
         self.scr.init()
-        self.listbox = listbox.ListBox(self.scr, model=self._makemodel())
-        self.scr.windows = [self.listbox]
+        self._model = self._makemodel()
+        self._model.attachview(listbox.ListBox(model=self._model, parent=self.scr))
+        self.scr.windows = self._model.views[:]
         self.scr.draw()
         self.scr.run()
 
@@ -51,16 +52,16 @@ class AppMixin:
         self.scr.running = False
 
     def up(self):
-        self.listbox.up()
+        self._model.up()
 
     def down(self):
-        self.listbox.down()
+        self._model.down()
 
     def pageup(self):
-        self.listbox.pageup()
+        self._model.pageup()
 
     def pagedown(self):
-        self.listbox.pagedown()
+        self._model.pagedown()
 
     def close(self):
         self.scr.close()
@@ -78,51 +79,64 @@ class DesktopApp(AppMixin):
 
     def __init__(self, client, showcurrent, msgduration=1.2):
         super().__init__(client, showcurrent, msgduration)
-        self.desktops = self.client.getdesktopnames()[self._offset:]
 
     def _makemodel(self):
-        return listbox.Model(rows=[[d] for d in self.desktops])
+        desktops = self.client.getdesktopnames()[self._offset:]
+        columns = [listbox.ListColumn(name='desk', label="Desktop"),
+                   listbox.ListColumn(name='desknum', visible=False, label="Number"),
+            ]
+        return listbox.Model(columns=columns, rows=[{'desk': d, 'desknum': i} for i, d in enumerate(desktops)])
 
     def activateselection(self):
-        deskname = self.desktops[self.listbox.selected]
+        row = self._model.selected
+        deskname = row['desk']
+        desknum = row['desknum']
         msg = msgwin.Message(lines=[deskname], parent=self.scr, title='Selecting')
         self.scr.windows.append(msg)
         self.scr.draw()
         time.sleep(self._msgduration)
         self.scr.windows.remove(msg)
-        self.client.selectdesktop(self.listbox.selected)
+        self.client.selectdesktop(desknum)
         self.scr.draw()
         self.stop()
 
     def closeselection(self):
-        deskname = self.desktops[self.listbox.selected]
-        self.client.deletedesktop(self.listbox.selected)
+        row = self._model.selected
+        desknum = row['desknum']
+        self.client.deletedesktop(desknum)
         self.stop()
 
 class WindowApp(AppMixin):
 
     def __init__(self, client, showcurrent, msgduration=1.2):
         super().__init__(client, showcurrent, msgduration)
-        self.windows = self.client.getwindowlist()[self._offset:]
 
     def _makemodel(self):
-        columns = ['Resource', 'Class', 'Title']
-        return listbox.Model(rows=[[w.resourcename, w.resourceclass, w.name] for w in self.windows], columns=columns)
+        windows = self.client.getwindowlist()[self._offset:]
+        columns = [listbox.ListColumn(name='res', label='Resource'),
+                   listbox.ListColumn(name='cls', label='Class'),
+                   listbox.ListColumn(name='title', label='Title'),
+                   listbox.ListColumn(name='wid', label='Window', visible=False),
+            ]
+        return listbox.Model(rows=[{'res': w.resourcename, 'cls': w.resourceclass, 'title': w.name, 'wid': w.window} for w in windows], columns=columns)
 
     def activateselection(self):
-        win = self.windows[self.listbox.selected]
-        msg = msgwin.Message(lines=[win.name], parent=self.scr, title='Activating')
+        row = self._model.selected
+        winname = row['title']
+        wid = row['wid']
+        msg = msgwin.Message(lines=[winname], parent=self.scr, title='Activating')
         self.scr.windows.append(msg)
         self.scr.draw()
         time.sleep(self._msgduration)
         self.scr.windows.remove(msg)
-        self.client.activatewindow(window=win.window)
+        self.client.activatewindow(window=wid)
         self.scr.draw()
         self.stop()
 
     def closeselection(self):
-        win = self.windows[self.listbox.selected]
-        self.client.closewindow(window=win.window)
+        row = self._model.selected
+        wid = row['wid']
+        self.client.closewindow(window=wid)
         self.stop()
 
 def windowmenu(args):

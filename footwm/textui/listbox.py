@@ -12,41 +12,116 @@ class Model:
     """ The data that the listbox will display. """
 
     def __init__(self, showindex=True, showheader=True, rows=None, columns=None):
+        # When inserting rows, the model always inserts two if its own housekeeping columns.
+        # display index and a unique key id.
+        self._indexcolumn = ListColumn(name='__index', label=' # ', visible=showindex)
+        self._keycolumn = ListColumn(name='__key', label='KEY', visible=False)
         # Store the original columns and rows before any filtering.
-        self._rows = rows or []
-        self._columns = columns or []
-        self.showindex = showindex
-        # Can only show the column header if there are column names.
-        self.showheader = showheader and self.columns
+        self.rows = rows
+        self.columns = columns
+        self._showheader = showheader
+        self.selectedindex = 0
+        self.views = []
+
+    @property
+    def showheader(self):
+        # Can only show the column header if there are some visible columns.
+        return self._showheader and self.visiblecolumns
+
+    def attachview(self, view):
+        self.views.append(view)
+
+    def updateviews(self):
+        for v in self.views:
+            v.draw()
 
     @property
     def columns(self):
-        cols = ([' # '] if self.showindex else []) + self._columns
-        return cols
+        return self._columns
+
+    @columns.setter
+    def columns(self, cols):
+        self._columns = [self._indexcolumn, self._keycolumn] + (cols or [])
+
+    @property
+    def visiblecolumns(self):
+        """ Columns to be displayed by views. """
+        return [col for col in self.columns if col.visible]
 
     @property
     def rows(self):
-        if self.showindex:
-            ret = [["{:2d}".format(i)] + row for i, row in enumerate(self._rows, 1)]
-        else:
-            ret = self._rows
-        return ret
+        return self._rows
+
+    @rows.setter
+    def rows(self, r):
+        indexname = self._indexcolumn.name
+        keyname = self._keycolumn.name
+        self._rows = [dict([[keyname, i], [indexname, "{:2d}".format(i + 1)]] + list(rowdict.items())) for i, rowdict in enumerate(r or [[]])]
+
+    def _iscolumnvisible(self, name):
+        visible = False
+        for c in self._columns:
+            if c.name == name:
+                visible = c.visible
+                break
+        return visible
+
+    @property
+    def displayrows(self):
+        """ Only include visible columns of the rows, each row value is converted to a list in column order. """
+        visiblecolumns = self.visiblecolumns
+        return [[row[column.name] for column in visiblecolumns] for row in self.rows]
+
+    @property
+    def selected(self):
+        return self._rows[self.selectedindex]
+
+#    @selected.setter
+#    def selected(self, newindex):
+#        try:
+#            item = self.model.rows[newindex]
+#        except IndexError:
+#            log.error('ListBox.selected failed. index=%d out of range=%d!', newindex, len(self.model.rows))
+#        else:
+#            log.debug('newindex=%s oldindex=%s newlabel=%s', newindex, self.model.selectedindex, item)
+#            self.model.selectedindex = newindex
+#            self._update_viewport()
+
+    def up(self):
+        for v in self.views:
+            v.up()
+
+    def down(self):
+        for v in self.views:
+            v.down()
+
+    def pageup(self):
+        for v in self.views:
+            v.pageup()
+
+    def pagedown(self):
+        for v in self.views:
+            v.pagedown()
+
+class ListColumn:
+    """ Column display specification. """
+
+    def __init__(self, name, visible=True, label=None):
+        self.name = name
+        self.visible = visible
+        self.label = label
 
 class ListBox(common.PanelWindowMixin):
 
-    def __init__(self, parent, geom=None, model=None):
-        self._reset()
+    def __init__(self, model, parent, geom=None):
+        self.model = model
+        self._viewport_index = 0
         super().__init__(parent, geom)
         self._update_scroll()
-        self.model = model
 
     def _update_scroll(self):
         # Ensure _scroll is at least 1, no point having a zero scroll value.
         self._scroll = max(int(self._geom.h / 2), 1)
-
-    def _reset(self):
-        self._viewport_index = 0
-        self._selected_index = 0
 
     def resize(self, geom):
         super().resize(geom)
@@ -64,14 +139,17 @@ class ListBox(common.PanelWindowMixin):
         headerlines = 2 if self.model.showheader else 0
         maxrows = geom.h - borders - headerlines
         # Get our slice of display items, then display them.
-        sl = self.model.rows[self._viewport_index:self._viewport_index + maxrows]
+        sl = self.model.displayrows[self._viewport_index:self._viewport_index + maxrows]
         ## Calculate the max width of each row.
         # Note that the column headers are included in this calculation!
         rowmaxes = []
-        columns = self.model.columns if self.model.showheader else []
+        columns = self.model.visiblecolumns if self.model.showheader else []
         for i, row in enumerate([columns] + sl, 1):
             for j, col in enumerate(row):
-                length = len(col)
+                try:
+                    length = len(col.label)
+                except AttributeError:
+                    length = len(col)
                 try:
                     oldmax = rowmaxes[j]
                 except IndexError:
@@ -95,8 +173,8 @@ class ListBox(common.PanelWindowMixin):
         if self.model.showheader:
             ybase += 1
             xpos = xbase
-            for rm, columnname in zip(rowmaxes, columns):
-                self._win.addstr(ybase, xpos, columnname, headercolour)
+            for rm, column in zip(rowmaxes, columns):
+                self._win.addstr(ybase, xpos, column.label, headercolour)
                 xpos += rm + 3
             ## Draw column header divider line.
             ybase += 1
@@ -113,16 +191,18 @@ class ListBox(common.PanelWindowMixin):
         ## Draw row contents.
         #log.debug('listbox.draw len(slice)=%s h=%s viewport_index=%s', len(sl), self.h, self._viewport_index)
         ybase += 1
+        currentindex = self.model.selectedindex - self._viewport_index
         for i, row in enumerate(sl):
-            if i == (self._selected_index - self._viewport_index):
+            if i == currentindex:
                 textcolour = curses.color_pair(0) | curses.A_BOLD
             else:
                 textcolour = curses.color_pair(0)
             xpos = xbase
-            for rowmax, col in zip(rowmaxes, row):
-                text = util.clip_end(col, geom.w - 1)
-                self._win.addstr(i + ybase, xpos, text, textcolour)
+            for rowmax, field in zip(rowmaxes, row):
+                text = util.clip_end(field, geom.w - 1)
+                self._win.addstr(ybase, xpos, text, textcolour)
                 xpos += rowmax + 3
+            ybase += 1
         super().draw()
 
     def down(self):
@@ -132,9 +212,9 @@ class ListBox(common.PanelWindowMixin):
         self._down(self._scroll)
 
     def _down(self, count):
-        self._selected_index += count
-        if self._selected_index >= len(self.model.rows):
-            self._selected_index = len(self.model.rows) - 1
+        self.model.selectedindex += count
+        if self.model.selectedindex >= len(self.model.rows):
+            self.model.selectedindex = len(self.model.rows) - 1
         self._update_viewport()
 
     def up(self):
@@ -144,38 +224,22 @@ class ListBox(common.PanelWindowMixin):
         self._up(self._scroll)
 
     def _up(self, count):
-        self._selected_index = max(self._selected_index - count, 0)
+        self.model.selectedindex = max(self.model.selectedindex - count, 0)
         self._update_viewport()
 
     def _update_viewport(self):
         """ Calculates _viewport_index position w/respect to screen LINES. Scroll the viewport if needed. """
         # Is the selected item visible on screen?
         geom = self._geom
-        log.debug('update_viewport old listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self._selected_index, self._viewport_index, self._scroll)
+        log.debug('update_viewport old listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self.model.selectedindex, self._viewport_index, self._scroll)
         # offset makes sure that the selected item is visible on screen.
         # This calc only works because self._scroll is h/2. Doing the subtraction accounts for case where self.h == 1.
         # Could probably do this nicer but it works for now..
         offset = geom.h - self._scroll
-        if self._selected_index < self._viewport_index:
+        if self.model.selectedindex < self._viewport_index:
             # Selected item is above viewport, try and centre the item on screen.
-            self._viewport_index = max(self._selected_index - offset, 0)
-        elif self._selected_index >= (self._viewport_index + geom.h):
+            self._viewport_index = max(self.model.selectedindex - offset, 0)
+        elif self.model.selectedindex >= (self._viewport_index + geom.h):
             # Selected item is below viewport+pageheight, try and centre the item on screen.
-            self._viewport_index = self._selected_index - offset
-        log.debug('update_viewport new listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self._selected_index, self._viewport_index, self._scroll)
-
-    @property
-    def selected(self):
-        """ Return the current selected index. """
-        return self._selected_index
-
-    @selected.setter
-    def selected(self, newindex):
-        try:
-            item = self.model.rows[newindex]
-        except IndexError:
-            log.error('ListBox.selected failed. index=%d out of range=%d!', newindex, len(self.model.rows))
-        else:
-            log.debug('newindex=%s oldindex=%s newlabel=%s', newindex, self._selected_index, item)
-            self._selected_index = newindex
-            self._update_viewport()
+            self._viewport_index = self.model.selectedindex - offset
+        log.debug('update_viewport new listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self.model.selectedindex, self._viewport_index, self._scroll)
