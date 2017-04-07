@@ -140,29 +140,16 @@ class ListBox(common.PanelWindowMixin):
         maxrows = geom.h - borders - headerlines
         # Get our slice of display items, then display them.
         sl = self.model.displayrows[self._viewport_index:self._viewport_index + maxrows]
-        ## Calculate the max width of each row.
-        # Note that the column headers are included in this calculation!
-        rowmaxes = []
+        ## Calculate the max width of each column.
         columns = self.model.visiblecolumns if self.model.showheader else []
-        for i, row in enumerate([columns] + sl, 1):
-            for j, col in enumerate(row):
-                try:
-                    length = len(col.label)
-                except AttributeError:
-                    length = len(col)
-                try:
-                    oldmax = rowmaxes[j]
-                except IndexError:
-                    rowmaxes.append(length)
-                else:
-                    rowmaxes[j] = max(rowmaxes[j], length)
+        maxwidths = self._calcmaxwidths(columns, sl)
 
         ## Draw the verticle column divider lines.
         xbase = 2
         ybase = 0
         xpos = xbase
         # Don't draw the last column.
-        for rm in rowmaxes[:-1]:
+        for rm in maxwidths[:-1]:
             xpos += rm + 1
             self._win.addch(ybase, xpos, curses.ACS_TTEE)
             self._win.vline(ybase + 1, xpos, curses.ACS_VLINE, geom.h - ybase - 1)
@@ -173,7 +160,7 @@ class ListBox(common.PanelWindowMixin):
         if self.model.showheader:
             ybase += 1
             xpos = xbase
-            for rm, column in zip(rowmaxes, columns):
+            for rm, column in zip(maxwidths, columns):
                 self._win.addstr(ybase, xpos, column.label, headercolour)
                 xpos += rm + 3
             ## Draw column header divider line.
@@ -182,7 +169,7 @@ class ListBox(common.PanelWindowMixin):
             xpos = 1
             self._win.hline(ybase, xpos, curses.ACS_HLINE, geom.w - borders)
             xpos = xbase
-            for rm in rowmaxes[:-1]:
+            for rm in maxwidths[:-1]:
                 xpos += rm + 1
                 self._win.addch(ybase, xpos, curses.ACS_PLUS)
                 xpos += 2
@@ -198,7 +185,7 @@ class ListBox(common.PanelWindowMixin):
             else:
                 textcolour = curses.color_pair(0)
             xpos = xbase
-            for rowmax, field in zip(rowmaxes, row):
+            for rowmax, field in zip(maxwidths, row):
                 text = util.clip_end(field, geom.w - 1)
                 self._win.addstr(ybase, xpos, text, textcolour)
                 xpos += rowmax + 3
@@ -243,3 +230,20 @@ class ListBox(common.PanelWindowMixin):
             # Selected item is below viewport+pageheight, try and centre the item on screen.
             self._viewport_index = self.model.selectedindex - offset
         log.debug('update_viewport new listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self.model.selectedindex, self._viewport_index, self._scroll)
+
+    def _calcmaxwidths(self, columns, visiblerows):
+        # Note that the column headers are included in this calculation!
+        maxwidths = []
+        for i, row in enumerate([columns] + visiblerows, 1):
+            for j, col in enumerate(row):
+                try:
+                    length = len(col.label)
+                except AttributeError:
+                    length = len(col)
+                try:
+                    oldmax = maxwidths[j]
+                except IndexError:
+                    maxwidths.append(length)
+                else:
+                    maxwidths[j] = max(maxwidths[j], length)
+        return maxwidths
