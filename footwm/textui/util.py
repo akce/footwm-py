@@ -1,3 +1,5 @@
+# Python standard modules.
+import os
 
 # Local modules.
 from .. import log as logmodule
@@ -41,3 +43,6 @@ def clip_end(label, width, suffix='...'):
     else:
         newlabel = label
     return newlabel
+
+def setescapedelay(escapedelay):
+    os.environ['ESCDELAY'] = str(escapedelay)

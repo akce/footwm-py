@@ -3,7 +3,6 @@
 # Python standard modules.
 import argparse
 import curses
-import os
 import time
 
 # Local modules.
@@ -12,6 +11,7 @@ from . import nestedarg
 from .textui import listbox
 from .textui import msgwin
 from .textui import screen
+from .textui import util
 
 def xinit(displayname=None):
     display, root = clientcmd.makedisplayroot(displayname)
@@ -157,9 +157,6 @@ def desktopmenu(args):
     finally:
         app.close()
 
-def setescapedelay(args):
-    os.environ['ESCDELAY'] = str(args.escapedelay)
-
 def parse_args():
     dispparser = argparse.ArgumentParser(add_help=False)
     dispparser.add_argument('--displayname', help='X display name.')
@@ -177,5 +174,5 @@ def parse_args():
 
 def main():
     args = parse_args()
-    setescapedelay(args)
+    util.setescapedelay(args.escapedelay)
     args.command(args)
