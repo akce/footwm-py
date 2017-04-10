@@ -2,12 +2,12 @@
 
 # Python standard modules.
 import argparse
-import curses
 import time
 
 # Local modules.
 from . import clientcmd
 from . import nestedarg
+from .textui import keyconfig
 from .textui import listbox
 from .textui import msgwin
 from .textui import screen
@@ -26,24 +26,23 @@ class AppMixin:
         self._msgduration = msgduration
         self.scr = screen.Screen(self)
         self._model = self._makemodel()
-        # Command mode keymap.
-        self.eventmap = {
-            ord('a'):		self.activateselection,
-            ord('x'):		self.closeselection,
-            ord('q'):		self.stop,
-            # Escape == 27.
-            27:			self.stop,
-            # Enter == 10.
-            10:			self.activateselection,
-            curses.KEY_UP:	self._model.up,
-            ord('k'):		self._model.up,
-            curses.KEY_DOWN:	self._model.down,
-            ord('j'):		self._model.down,
-            curses.KEY_PPAGE:	self._model.pageup,
-            ord('K'):		self._model.pageup,
-            curses.KEY_NPAGE:	self._model.pagedown,
-            ord('J'):		self._model.pagedown,
-            }
+        with keyconfig.KeyBuilder(keyapp=self) as kc:
+            kc.addkey('a', self.activateselection)
+            kc.addkey('x', self.closeselection)
+            kc.addkey('q', self.stop)
+            kc.addkey('ESC', self.stop)
+            kc.addkey('ENTER', self.activateselection)
+            kc.addkey('UP', self._model.up)
+            kc.addkey('k', self._model.up)
+            kc.addkey('DOWN', self._model.down)
+            kc.addkey('j', self._model.down)
+            kc.addkey('PAGEUP', self._model.pageup)
+            kc.addkey('K', self._model.pageup)
+            kc.addkey('PAGEDOWN', self._model.pagedown)
+            kc.addkey('J', self._model.pagedown)
+
+    def _installkeymap(self, keymap):
+        self.eventmap = keymap['root']
 
     def run(self):
         self.scr.init()
@@ -58,13 +57,13 @@ class AppMixin:
     def close(self):
         self.scr.close()
 
-    def on_user_event(self, kid):
+    def on_user_event(self, keycode):
         try:
-            func = self.eventmap[kid]
+            key = self.eventmap[keycode]
         except KeyError:
             pass
         else:
-            func()
+            key.action()
             self.scr.draw()
 
 class DesktopApp(AppMixin):
