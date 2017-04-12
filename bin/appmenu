@@ -1,0 +1,8 @@
+#! /usr/bin/env python3
+#
+# Appmenu run script.
+#
+
+from footwm import appmenu
+
+appmenu.main()

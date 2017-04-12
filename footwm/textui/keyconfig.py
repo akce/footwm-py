@@ -25,10 +25,13 @@ class Key:
         self.code = code
         self.action = action
 
+    def __call__(self, *args, **kwargs):
+        return self.action(*args, **kwargs)
+
 class KeyBuilder:
 
-    def __init__(self, keyapp):
-        self._keyapp = keyapp
+    def __init__(self, installer):
+        self._installer = installer
         self._keymaps = collections.defaultdict(collections.OrderedDict)
 
     def addkey(self, key, action, label='', keymapname='root'):
@@ -45,4 +48,4 @@ class KeyBuilder:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is None:
             # No exception occurred, install the keymap.
-            self._keyapp._installkeymap(self._keymaps)
+            self._installer(self._keymaps)

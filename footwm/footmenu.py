@@ -26,12 +26,13 @@ class AppMixin:
         self._msgduration = msgduration
         self.scr = screen.Screen(self)
         self._model = self._makemodel()
-        with keyconfig.KeyBuilder(keyapp=self) as kc:
+        with keyconfig.KeyBuilder(installer=self._installkeymap) as kc:
             kc.addkey('a', self.activateselection)
             kc.addkey('x', self.closeselection)
             kc.addkey('q', self.stop)
             kc.addkey('ESC', self.stop)
             kc.addkey('ENTER', self.activateselection)
+            ## Navigation keys.
             kc.addkey('UP', self._model.up)
             kc.addkey('k', self._model.up)
             kc.addkey('DOWN', self._model.down)
