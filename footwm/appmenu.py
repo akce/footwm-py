@@ -50,6 +50,11 @@ class AppMixin:
     def close(self):
         self.scr.close()
 
+    def setmenu(self, keymapname):
+        if keymapname in self.menu:
+            self.currmenu = keymapname
+            self._model.rows = self._makerows()
+
     @property
     def eventmap(self):
         # Merge the listbox nav keys and menu map.
@@ -71,12 +76,15 @@ class AppMenu(AppMixin):
         super().__init__(msgduration)
         self.currmenu = 'root'
 
+    def _makerows(self):
+        return [{'key': a.key, 'label': a.label, 'cmd': a.action} for code, a in self.menu[self.currmenu].items()]
+
     def _makemodel(self):
         columns = [listbox.ListColumn(name='key', label='Key'),
                    listbox.ListColumn(name='label', label='Label'),
                    listbox.ListColumn(name='cmd', label='Command line', visible=False),
             ]
-        model = listbox.Model(rows=[{'key': a.key, 'label': a.label, 'cmd': a.action} for code, a in self.menu[self.currmenu].items()], columns=columns)
+        model = listbox.Model(rows=self._makerows(), columns=columns)
         return model
 
     def config(self):
@@ -111,31 +119,33 @@ class LazyClient(clientcmd.ClientCommand):
         super().__init__(root)
         return self.cmd(*self.args, **self.kwargs)
 
-class LazyRun:
-    """ Connect to the footrun daemon only on use. """
+class DoAfter:
+    """ A double-callable functools.partial that also calls 'after' after the func has been run. """
 
-    def __init__(self, menu, address=None):
-        self.menu = menu
-        self.address = address
+    def __init__(self, func, after=None, **kwargs):
+        # Set the after attribute to be some sort of zero-arg callable.
+        self.after = callable(after) or bool
+        self.func = func
+        self.kwargs = kwargs
 
     def __call__(self, *args, **kwargs):
-        def stopafterrun():
-            footrun.run(*args, address=self.address, **kwargs)
-            self.menu.stop()
-        return stopafterrun
+        def doafterfunc():
+            self.func(*args, **dict([(k, v) for k, v in self.kwargs.items()] + [(k, v) for k, v in kwargs.items()]))
+            self.after()
+        return doafterfunc
 
 def appmenu(args):
     """ Application menu. Applications can be any valid python code. """
     appmenu = AppMenu(msgduration=args.msgduration)
     with appmenu.config() as menuconfig:
-        # Create a client object and add it into the configs
-        # namespace. One of these is handy and would be used by every
-        # config.
+        # Create some config objects and add them into the configs
+        # namespace. eg, things that would be handy and used by most configs.
         gl = globals().copy()
         gl['x'] = LazyClient(args.displayname, appmenu)
-        gl['akce'] = LazyRun(menu=appmenu)
+        gl['akce'] = DoAfter(after=appmenu.stop, func=footrun.run, address=None)
         gl['run'] = gl['akce']
         gl['appmenu'] = appmenu
+        gl['setmenu'] = DoAfter(func=appmenu.setmenu)
         config.loadconfig(args.config, gl, locals())
     try:
         appmenu.run()
