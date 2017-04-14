@@ -101,24 +101,6 @@ class AppMenu(AppMixin):
         finally:
             pass
 
-class LazyClient(clientcmd.ClientCommand):
-    """ Connects to the X Server only on use. """
-
-    def __init__(self, displayname, menu):
-        self.displayname = displayname
-        self.menu = menu
-
-    def do(self, *args, **kwargs):
-        self.cmd = args[0]
-        self.args = args[1:]
-        self.kwargs = kwargs
-        return self
-
-    def __call__(self):
-        display, root = clientcmd.makedisplayroot(self.displayname)
-        super().__init__(root)
-        return self.cmd(*self.args, **self.kwargs)
-
 class DoAfter:
     """ A double-callable functools.partial that also calls 'after' after the func has been run. """
 
@@ -141,7 +123,6 @@ def appmenu(args):
         # Create some config objects and add them into the configs
         # namespace. eg, things that would be handy and used by most configs.
         gl = globals().copy()
-        gl['x'] = LazyClient(args.displayname, appmenu)
         gl['akce'] = DoAfter(after=appmenu.stop, func=footrun.run, address=None)
         gl['run'] = gl['akce']
         gl['appmenu'] = appmenu
