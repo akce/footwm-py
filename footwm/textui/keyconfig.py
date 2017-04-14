@@ -1,10 +1,11 @@
 import collections
 import curses
+from curses import ascii
 
 keylabels = {
-    10:			'ENTER',
-    20:			'SPACE',
-    27:			'ESC',
+    ascii.NL:		'ENTER',
+    ascii.ESC:		'ESC',
+    ascii.DC4:		'SPACE',
     curses.KEY_NPAGE:	'PAGEDOWN',
     curses.KEY_PPAGE:	'PAGEUP',
     curses.KEY_UP:	'UP',
