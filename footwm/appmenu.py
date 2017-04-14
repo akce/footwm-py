@@ -99,7 +99,7 @@ class AppMenu(AppMixin):
         try:
             command()
         finally:
-            self.stop()
+            pass
 
 class LazyClient(clientcmd.ClientCommand):
     """ Connects to the X Server only on use. """
