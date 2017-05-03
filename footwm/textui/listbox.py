@@ -1,5 +1,6 @@
 # Python standard modules.
 import curses
+import itertools
 
 # Local modules.
 from . import common
@@ -12,21 +13,19 @@ class Model:
     """ The data that the listbox will display. """
 
     def __init__(self, showindex=True, showheader=True, rows=None, columns=None):
-        # When inserting rows, the model always inserts two if its own housekeeping columns.
-        # display index and a unique key id.
-        self._indexcolumn = ListColumn(name='__index', label=' # ', visible=showindex)
-        self._keycolumn = ListColumn(name='__key', label='KEY', visible=False)
+        # The model always inserts its own housekeeping columns.
+        # unique key id.
+        self._uidcolumn = ListColumn(name='_uid', label='UID', visible=False)
         # Store the original columns and rows before any filtering.
         self.rows = rows
         self.columns = columns
-        self._showheader = showheader
+        self.showheader = showheader
         self.selectedindex = 0
         self.view = None
 
     @property
-    def showheader(self):
-        # Can only show the column header if there are some visible columns.
-        return self._showheader and self.visiblecolumns
+    def drawheader(self):
+        return self.showheader and any(col.label for col in self.columns if col.visible)
 
     @property
     def columns(self):
@@ -34,43 +33,21 @@ class Model:
 
     @columns.setter
     def columns(self, cols):
-        self._columns = [self._indexcolumn, self._keycolumn] + (cols or [])
-
-    @property
-    def visiblecolumns(self):
-        """ Columns to be displayed by view. """
-        return [col for col in self.columns if col.visible]
+        self._columns = [self._uidcolumn] + (cols or [])
 
     @property
     def rows(self):
         return self._rows
 
     @rows.setter
-    def rows(self, r):
-        indexname = self._indexcolumn.name
-        keyname = self._keycolumn.name
-        try:
-            self._rows = [dict([[keyname, i], [indexname, "{:2d}".format(i + 1)]] + list(rowdict.items())) for i, rowdict in enumerate(r)]
-        except AttributeError:
-            self._rows = []
-
-    def _iscolumnvisible(self, name):
-        visible = False
-        for c in self._columns:
-            if c.name == name:
-                visible = c.visible
-                break
-        return visible
-
-    @property
-    def displayrows(self):
-        """ Only include visible columns of the rows, each row value is converted to a list in column order. """
-        visiblecolumns = self.visiblecolumns
-        return [[row[column.name] for column in visiblecolumns] for row in self.rows]
+    def rows(self, rowdictlist):
+        """ Note that rows are converted to an internal row representation. """
+        uidname = self._uidcolumn.name
+        self._rows = [ListRowStatic([[uidname, uid]] + list(rowdict.items())) for uid, rowdict in enumerate(rowdictlist)]
 
     @property
     def selected(self):
-        return self._rows[self.selectedindex]
+        return self.rows[self.selectedindex].data
 
     def up(self):
         self.view.up()
@@ -84,13 +61,41 @@ class Model:
     def pagedown(self):
         self.view.pagedown()
 
+    def calcmaxwidths(self, start, stop):
+        maxwidths = [len(col.label) for col in self.columns if col.visible] if self.showheader else []
+        for row in itertools.islice(self.rows, start, stop):
+            for j, cell in enumerate(row.cells(self.columns, visibleonly=True)):
+                length = len(cell)
+                try:
+                    oldmax = maxwidths[j]
+                except IndexError:
+                    maxwidths.append(length)
+                else:
+                    maxwidths[j] = max(maxwidths[j], length)
+        return maxwidths
+
 class ListColumn:
     """ Column display specification. """
 
     def __init__(self, name, visible=True, label=None):
         self.name = name
         self.visible = visible
-        self.label = label
+        self.label = label or ""
+
+def alwaystrue(x):
+    return True
+
+def isvisible(x):
+    return x.visible
+
+class ListRowStatic:
+
+    def __init__(self, iterable):
+        self.data = dict(iterable)
+
+    def cells(self, columns, visibleonly=False):
+        pred = isvisible if visibleonly else alwaystrue
+        return [self.data[c.name] for c in columns if pred(c)]
 
 class ListBox(common.PanelWindowMixin):
 
@@ -117,13 +122,13 @@ class ListBox(common.PanelWindowMixin):
         self._win.box()
         geom = self._geom
         borders = 2
-        headerlines = 2 if self.model.showheader else 0
+        headerlines = 2 if self.model.drawheader else 0
         maxrows = geom.h - borders - headerlines
         # Get our slice of display items, then display them.
-        sl = self.model.displayrows[self._viewport_index:self._viewport_index + maxrows]
+        displayslice = slice(self._viewport_index, self._viewport_index + maxrows)
         ## Calculate the max width of each column.
-        columns = self.model.visiblecolumns if self.model.showheader else []
-        maxwidths = self._calcmaxwidths(columns, sl)
+        # Note that the column headers are included only when there's something to display, ie drawheader is True.
+        maxwidths = self.model.calcmaxwidths(displayslice.start, displayslice.stop)
 
         ## Draw the verticle column divider lines.
         xbase = 2
@@ -138,10 +143,11 @@ class ListBox(common.PanelWindowMixin):
             xpos += 2
 
         ## Draw column headers.
-        if self.model.showheader:
+        if headerlines > 0:
             ybase += 1
             xpos = xbase
-            for rm, column in zip(maxwidths, columns):
+            visiblecolumns = [col for col in self.model.columns if col.visible]
+            for rm, column in zip(maxwidths, visiblecolumns):
                 self._win.addstr(ybase, xpos, column.label, headercolour)
                 xpos += rm + 3
             ## Draw column header divider line.
@@ -157,17 +163,16 @@ class ListBox(common.PanelWindowMixin):
             self._win.addch(ybase, geom.w - 1, curses.ACS_RTEE)
 
         ## Draw row contents.
-        #log.debug('listbox.draw len(slice)=%s h=%s viewport_index=%s', len(sl), self.h, self._viewport_index)
         ybase += 1
         currentindex = self.model.selectedindex - self._viewport_index
-        for i, row in enumerate(sl):
+        for i, row in enumerate(self.model.rows[displayslice]):
             if i == currentindex:
                 textcolour = curses.color_pair(0) | curses.A_BOLD
             else:
                 textcolour = curses.color_pair(0)
             xpos = xbase
-            for rowmax, field in zip(maxwidths, row):
-                text = util.clip_end(field, geom.w - 1)
+            for rowmax, cell in zip(maxwidths, row.cells(self.model.columns, visibleonly=True)):
+                text = util.clip_end(cell, geom.w - 1)
                 self._win.addstr(ybase, xpos, text, textcolour)
                 xpos += rowmax + 3
             ybase += 1
@@ -180,9 +185,7 @@ class ListBox(common.PanelWindowMixin):
         self._down(self._scroll)
 
     def _down(self, count):
-        self.model.selectedindex += count
-        if self.model.selectedindex >= len(self.model.rows):
-            self.model.selectedindex = len(self.model.rows) - 1
+        self.model.selectedindex = min(self.model.selectedindex + count, len(self.model.displayrows) - 1)
         self._update_viewport()
 
     def up(self):
@@ -211,20 +214,3 @@ class ListBox(common.PanelWindowMixin):
             # Selected item is below viewport+pageheight, try and centre the item on screen.
             self._viewport_index = self.model.selectedindex - offset
         log.debug('update_viewport new listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self.model.selectedindex, self._viewport_index, self._scroll)
-
-    def _calcmaxwidths(self, columns, visiblerows):
-        # Note that the column headers are included in this calculation!
-        maxwidths = []
-        for i, row in enumerate([columns] + visiblerows, 1):
-            for j, col in enumerate(row):
-                try:
-                    length = len(col.label)
-                except AttributeError:
-                    length = len(col)
-                try:
-                    oldmax = maxwidths[j]
-                except IndexError:
-                    maxwidths.append(length)
-                else:
-                    maxwidths[j] = max(maxwidths[j], length)
-        return maxwidths
