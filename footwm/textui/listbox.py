@@ -62,16 +62,10 @@ class Model:
         self.view.pagedown()
 
     def calcmaxwidths(self, start, stop, includeheader=False):
-        maxwidths = [len(col.label) for col in self.columns if col.visible] if includeheader else []
+        maxwidths = [len(col.label) if includeheader else 0 for col in self.columns if col.visible]
         for row in itertools.islice(self.rows, start, stop):
             for j, cell in enumerate(row.cells(self.columns, visibleonly=True)):
-                length = len(cell)
-                try:
-                    oldmax = maxwidths[j]
-                except IndexError:
-                    maxwidths.append(length)
-                else:
-                    maxwidths[j] = max(maxwidths[j], length)
+                maxwidths[j] = max(maxwidths[j], len(cell))
         return maxwidths
 
 class ListColumn:
