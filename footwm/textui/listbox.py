@@ -61,8 +61,8 @@ class Model:
     def pagedown(self):
         self.view.pagedown()
 
-    def calcmaxwidths(self, start, stop):
-        maxwidths = [len(col.label) for col in self.columns if col.visible] if self.showheader else []
+    def calcmaxwidths(self, start, stop, includeheader=False):
+        maxwidths = [len(col.label) for col in self.columns if col.visible] if includeheader else []
         for row in itertools.islice(self.rows, start, stop):
             for j, cell in enumerate(row.cells(self.columns, visibleonly=True)):
                 length = len(cell)
@@ -128,7 +128,7 @@ class ListBox(common.PanelWindowMixin):
         displayslice = slice(self._viewport_index, self._viewport_index + maxrows)
         ## Calculate the max width of each column.
         # Note that the column headers are included only when there's something to display, ie drawheader is True.
-        maxwidths = self.model.calcmaxwidths(displayslice.start, displayslice.stop)
+        maxwidths = self.model.calcmaxwidths(displayslice.start, displayslice.stop, includeheader=headerlines > 0)
 
         ## Draw the verticle column divider lines.
         xbase = 2
