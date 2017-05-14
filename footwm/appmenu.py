@@ -1,6 +1,7 @@
 
 # Python standard modules.
 import argparse
+import collections
 
 # Local modules.
 from . import clientcmd
@@ -21,6 +22,7 @@ class AppMixin:
 
     def __init__(self, msgduration=1.2):
         self._msgduration = msgduration
+        self.eventmap = collections.ChainMap()
         self.scr = screen.Screen(self)
 
     def run(self):
@@ -43,6 +45,7 @@ class AppMixin:
 
     def _installnavkeys(self, keymap):
         self.navkeys = keymap['root']
+        self.eventmap.maps.append(self.navkeys)
 
     def stop(self):
         self.scr.running = False
@@ -52,14 +55,9 @@ class AppMixin:
 
     def setmenu(self, keymapname):
         if keymapname in self.menu:
+            self.eventmap = collections.ChainMap(self.menu[keymapname], self.navkeys)
             self.currmenu = keymapname
             self._model.rows = self._makerows()
-
-    @property
-    def eventmap(self):
-        # Merge the listbox nav keys and menu map.
-        # Note the order, menu overrides navkeys.
-        return dict([(k, v) for k, v in self.navkeys.items()] + [(k, v) for k, v in self.menu[self.currmenu].items()])
 
     def on_user_event(self, kid):
         try:
@@ -92,6 +90,7 @@ class AppMenu(AppMixin):
 
     def _installmenu(self, menu):
         self.menu = menu
+        self.eventmap.maps.append(menu[self.currmenu])
 
     def activateselection(self):
         row = self._model.selected
