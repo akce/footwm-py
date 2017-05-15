@@ -304,7 +304,7 @@ class ListBox(common.PanelWindowMixin):
         self._down(self._scroll)
 
     def _down(self, count):
-        self.model.selectedindex = min(self.model.selectedindex + count, len(self.model.displayrows) - 1)
+        self.model.selectedindex = min(self.model.selectedindex + count, len(self.model.rows) - 1)
         self._update_viewport()
 
     def up(self):

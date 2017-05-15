@@ -84,7 +84,7 @@ class DesktopApp(AppMixin):
     def activateselection(self):
         row = self._model.selected
         deskname = row['desk']
-        desknum = row['desknum']
+        desknum = int(row['desknum'])
         msg = msgwin.Message(lines=[deskname], parent=self.scr, title='Selecting')
         self.scr.windows.append(msg)
         self.scr.draw()
@@ -125,7 +125,7 @@ class WindowApp(AppMixin):
     def activateselection(self):
         row = self._model.selected
         winname = row['title']
-        wid = row['wid']
+        wid = int(row['wid'])
         msg = msgwin.Message(lines=[winname], parent=self.scr, title='Activating')
         self.scr.windows.append(msg)
         self.scr.draw()
