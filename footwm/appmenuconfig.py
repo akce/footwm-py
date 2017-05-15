@@ -11,21 +11,15 @@ menuconfig.addkey('a', label='Applications submenu', action=setmenu('apps'))
 menuconfig.addkey('c', label='Start Console', action=run(TERMINAL))
 menuconfig.addkey('d', label='Desktops', action=run(DESKTOPMENU))
 menuconfig.addkey('f', label='Firefox', action=run('firefox'))
+menuconfig.addkey('s', label='Search submenu', action=setmenu('search'))
 menuconfig.addkey('w', label='Windows', action=run(WINDOWMENU))
-
-# Submenus.
-#menuconfig.addkey('s', label='Search submenu', action=menu.setkeymap('search'))
 
 ## Apps menu.
 menuconfig.addkey('f', label='Firefox', action=run('firefox'), keymapname='apps')
 
 ## Search menu.
-# XXX how to add readline data into the command line?
-# XXX eg, as a python format spec? "{line1} {line2}".format(line1, line2)?
-# XXX readline as a function of menuconfig.
-#menuconfig.addkey('d', label='Duck Duck Go', action=run('search --engine duckduckgo'), readline=True, readhistory='.history', keymapname='search')
-# XXX readline as a function of the action itself.
-#menuconfig.addkey('d', label='Duck Duck Go', action=run('search --engine duckduckgo', readline=True, readhistory='.history'), keymapname='search')
-
-#menuconfig.addkey('i', label='IMDB', action=run('search --engine imdb'), keymapname='search')
-#menuconfig.addkey('w', label='wikipedia', action=run('search --engine wikipedia'), keymapname='search')
+searchcolumn = ('term', "Search term")
+menuconfig.addkey('d', label='Duck Duck Go', action=runform('surfraw duckduckgo "{term}"', fields=[searchcolumn]), keymapname='search')
+menuconfig.addkey('i', label='IMDB', action=runform('surfraw imdb "{term}"', fields=[searchcolumn]), keymapname='search')
+menuconfig.addkey('s', label='Surfraw search', action=runform('surfraw {engine} "{term}"', fields=[('engine', 'Engine'), searchcolumn]), keymapname='search')
+menuconfig.addkey('w', label='wikipedia', action=runform('surfraw wikipedia "{term}"', fields=[searchcolumn]), keymapname='search')

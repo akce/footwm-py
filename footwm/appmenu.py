@@ -2,6 +2,7 @@
 # Python standard modules.
 import argparse
 import collections
+import functools
 
 # Local modules.
 from . import clientcmd
@@ -100,19 +101,48 @@ class AppMenu(AppMixin):
         finally:
             pass
 
+    def editend(self, model, run, command):
+        data = dict([(k, v) for k, v in zip([c.name for c in model.columns if c.visible], model.rows[0].cells(model.columns, visibleonly=True))])
+        # HACK: Assumes that run is a DoAfter object, so we have to:
+        # -> run(command) :: DoAfter.__call__(command) -> doafterfunc
+        # -> doafterfunc()
+        # I would rather if this was not tied to DoAfter()...
+        run(command.format(**data))()
+
+    def readform(self, command, fields, run):
+        """ Opens a read form dialog, applying the results to the current row cmd. """
+        ## Note that we're using a new listbox in edit-row-mode for our form reader.
+        columns = [listbox.ListColumn(name=n, label=l) for n, l in fields]
+        model = listbox.Model(rows=[dict([(c.name, '') for c in columns])], columns=columns)
+        model.view = listbox.ListBox(model=model, parent=self._model.view)
+        model.view.top()
+        # Edit the first field.
+        self.scr.windows.append(model.view)
+        # Set the input keymap.
+        endfunc = functools.partial(self.editend, command=command, run=run)
+        model.editstart(rownum=0, columnname=fields[0][0], validator=self.editvalidator, endfunc=endfunc, cancelfunc=self.stop)
+        self.eventmap = model.editeventmap
+        # TODO Display a context/completion window.
+        self.scr.draw()
+        self.scr.run()
+
+    def editvalidator(self, oldvalue, newvalue):
+        return True
+
 class DoAfter:
     """ A double-callable functools.partial that also calls 'after' after the func has been run. """
 
     def __init__(self, func, after=None, **kwargs):
         # Set the after attribute to be some sort of zero-arg callable.
-        self.after = callable(after) or bool
+        self.after = after
         self.func = func
         self.kwargs = kwargs
 
     def __call__(self, *args, **kwargs):
         def doafterfunc():
             self.func(*args, **dict([(k, v) for k, v in self.kwargs.items()] + [(k, v) for k, v in kwargs.items()]))
-            self.after()
+            if callable(self.after):
+                self.after()
         return doafterfunc
 
 def appmenu(args):
@@ -125,6 +155,7 @@ def appmenu(args):
         gl['akce'] = DoAfter(after=appmenu.stop, func=footrun.run, address=None)
         gl['run'] = gl['akce']
         gl['appmenu'] = appmenu
+        gl['runform'] = DoAfter(func=appmenu.readform, run=gl['akce'])
         gl['setmenu'] = DoAfter(func=appmenu.setmenu)
         config.loadconfig(args.config, gl, locals())
     try:

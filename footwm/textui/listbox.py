@@ -1,5 +1,7 @@
 # Python standard modules.
 import curses
+from curses import ascii as cascii
+import functools
 import itertools
 
 # Local modules.
@@ -22,6 +24,65 @@ class Model:
         self.showheader = showheader
         self.selectedindex = 0
         self.view = None
+        self.editeventmap = None
+
+    def insertchar(self, char):
+        self._editcell.insert(char)
+
+    def backspace(self):
+        self._editcell.backspace()
+
+    def cursormove(self, delta):
+        self._editcell.cursormove(delta)
+
+    def delete(self):
+        self._editcell.delete()
+
+    def editnextcolumn(self):
+        # Find the next column, and make that the only editcell.
+        oldcolumnname = self._editcell.columnname
+        cns = [c.name for c in self.columns if c.visible]
+        offbyone = itertools.cycle(cns)
+        next(offbyone)
+        for c, n in zip(cns, offbyone):
+            if c == oldcolumnname:
+                nextcolumnname = n
+                break
+        else:
+            # Internal error! Not found.
+            raise Exception('Column name {} not found.'.format(oldcolumnname))
+        # Make old editcell readonly.
+        validator = self._editcell._validator
+        self.editend()
+        self._editcell = self._rows[0].edit(nextcolumnname, validator)
+
+    def editstart(self, rownum, columnname, validator=None, endfunc=None, cancelfunc=None):
+        # Build the edit keymap.
+        if self.editeventmap is None:
+            # Seed with printable character insertion.
+            self.editeventmap = {kid: functools.partial(self.insertchar, chr(kid)) for kid in range(1, 255) if cascii.isprint(kid)}
+            # Add control characters.
+            self.editeventmap[curses.KEY_DC] = self.delete
+            self.editeventmap[cascii.DEL] = self.backspace
+            self.editeventmap[cascii.TAB] = self.editnextcolumn
+            self.editeventmap[curses.KEY_LEFT] = functools.partial(self.cursormove, -1)
+            self.editeventmap[curses.KEY_RIGHT] = functools.partial(self.cursormove, 1)
+            self.editeventmap[cascii.NL] = functools.partial(self.editend, endfunc)
+            if cancelfunc is not None:
+                self.editeventmap[cascii.ESC] = cancelfunc
+        self._editcell = self._rows[rownum].edit(columnname, validator)
+        # Turn on the cursor in the view.
+        # HACK! curses.curs_set(2) call doesn't work here for some reason. Resort to using the escape code directly.
+        print("\033[?25h", end='', flush=True)
+
+    def editend(self, endfunc=None):
+        # Clear the editcell and return all rows back to readonly.
+        oldcolumnname = self._editcell.columnname
+        row = self._rows[0]
+        row.data[oldcolumnname] = CellStatic(str(row.data[oldcolumnname]))
+        self._editcell = None
+        if endfunc is not None:
+            endfunc(self)
 
     @property
     def drawheader(self):
@@ -43,7 +104,7 @@ class Model:
     def rows(self, rowdictlist):
         """ Note that rows are converted to an internal row representation. """
         uidname = self._uidcolumn.name
-        self._rows = [ListRowStatic([[uidname, uid]] + list(rowdict.items())) for uid, rowdict in enumerate(rowdictlist)]
+        self._rows = [ListRow([[uidname, CellStatic(uid)]] + [[n, CellStatic(c)] for n, c in rowdict.items()]) for uid, rowdict in enumerate(rowdictlist)]
 
     @property
     def selected(self):
@@ -76,20 +137,84 @@ class ListColumn:
         self.visible = visible
         self.label = label or ""
 
-def alwaystrue(x):
+def alwaystrue(*args):
     return True
 
 def isvisible(x):
     return x.visible
 
-class ListRowStatic:
+class ListRow:
 
     def __init__(self, iterable):
         self.data = dict(iterable)
 
     def cells(self, columns, visibleonly=False):
         pred = isvisible if visibleonly else alwaystrue
-        return [self.data[c.name] for c in columns if pred(c)]
+        try:
+            return [self.data[c.name] for c in columns if pred(c)]
+        except KeyError:
+            raise Exception(str(list(self.data.items())))
+
+    def edit(self, columnname, validator):
+        cell = self.data[columnname]
+        editcell = CellEdit(cell, columnname, validator=validator)
+        self.data[columnname] = editcell
+        return editcell
+
+class CellStatic(str):
+
+    def draw(self, window, x, y, maxw, textcolour):
+        text = util.clip_end(self, maxw)
+        # addstr seems to move the cursor, so put it back once we finish writing.
+        cy, cx = window.getyx()
+        window.addstr(y, x, text, textcolour)
+        window.move(cy, cx)
+
+class CellEdit:
+
+    def __init__(self, contents, columnname, validator=None, cursorpos=0):
+        self._str = contents
+        self.columnname = columnname
+        self.cursorpos = cursorpos
+        self._validator = validator or alwaystrue
+
+    def draw(self, window, x, y, maxw, textcolour):
+        text = util.clip_end(self._str, maxw)
+        window.addstr(y, x, text, textcolour)
+        window.move(y, x + self.cursorpos)
+
+    def insert(self, char):
+        """ Insert char at cursorpos. """
+        newstr = self._str[:self.cursorpos] + char + self._str[self.cursorpos:]
+        if self._validator(self._str, newstr):
+            self._str = newstr
+            self.cursorpos += 1
+
+    def backspace(self):
+        """ Remove character to the left of cursorpos. """
+        # We can't let cursorpos go negative, python array indexing has -1 == end of list which is not what we want!
+        cp = max(self.cursorpos - 1, 0)
+        newstr = self._str[:cp] + self._str[self.cursorpos:]
+        if self._validator(self._str, newstr):
+            self._str = newstr
+            self.cursorpos = cp
+
+    def cursormove(self, delta):
+        if delta > 0:
+            self.cursorpos = min(len(self._str), self.cursorpos + delta)
+        elif delta < 0:
+            self.cursorpos = max(0, self.cursorpos + delta)
+
+    def delete(self):
+        newstr = self._str[:self.cursorpos] + self._str[self.cursorpos + 1:]
+        if self._validator(self._str, newstr):
+            self._str = newstr
+
+    def __len__(self):
+        return len(self._str)
+
+    def __str__(self):
+        return self._str
 
 class ListBox(common.PanelWindowMixin):
 
@@ -166,10 +291,10 @@ class ListBox(common.PanelWindowMixin):
                 textcolour = curses.color_pair(0)
             xpos = xbase
             for rowmax, cell in zip(maxwidths, row.cells(self.model.columns, visibleonly=True)):
-                text = util.clip_end(cell, geom.w - 1)
-                self._win.addstr(ybase, xpos, text, textcolour)
+                cell.draw(self._win, x=xpos, y=ybase, maxw=rowmax, textcolour=textcolour)
                 xpos += rowmax + 3
             ybase += 1
+        self._win.cursyncup()
         super().draw()
 
     def down(self):

@@ -55,6 +55,9 @@ class WindowMixin:
         """ Redraw window to virtual buffer. """
         self._win.noutrefresh()
 
+    def subwin(self, h, w, y, x):
+        return self._win.subwin(h, w, y, x)
+
 class PanelWindowMixin(WindowMixin):
 
     def __init__(self, parent, geom=None):
@@ -68,6 +71,9 @@ class PanelWindowMixin(WindowMixin):
             self._panel.replace(self._win)
         except AttributeError:
             self._panel = panel.new_panel(self._win)
+
+    def top(self):
+        self._panel.top()
 
     def draw(self):
         super().draw()
