@@ -89,6 +89,10 @@ class FootKeys:
         All ignoremods values are all masked out and ignored in keypress events.
         """
         self.display, self.root = clientcmd.makedisplayroot(displayname)
+        def xerrorhandler(display, xerrorevent):
+            log.error('X Error: %s', xerrorevent)
+            return 0
+        self.display.errorhandler = xerrorhandler
         self._makehandlers()
 
     def _makehandlers(self):
