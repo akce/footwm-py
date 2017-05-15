@@ -13,22 +13,26 @@ def addargs(parser):
 
 def configlogging(logspec, outfilename=None):
     # Configure a filehandler if given an outfilename.
-    if outfilename:
-        h = logging.FileHandler(outfilename)
+    try:
+        mods = logspec.split(',')
+    except AttributeError:
+        pass
     else:
-        h = logging.StreamHandler()
-    mods = logspec.split(',')
-    for m in mods:
-        try:
-            mod, lvlname = m.split(':')
-        except ValueError:
-            mod = m
-            # Default to INFO level logging if the module is present.
-            lvlname = 'info'
-        lvl = getattr(logging, lvlname.upper())
-        logger = make(name=mod, level=lvl, handler=h)
-        module = sys.modules[mod]
-        setattr(module, 'log', logger)
+        if outfilename:
+            h = logging.FileHandler(outfilename)
+        else:
+            h = logging.StreamHandler()
+        for m in mods:
+            try:
+                mod, lvlname = m.split(':')
+            except ValueError:
+                mod = m
+                # Default to INFO level logging if the module is present.
+                lvlname = 'info'
+            lvl = getattr(logging, lvlname.upper())
+            logger = make(name=mod, level=lvl, handler=h)
+            module = sys.modules[mod]
+            setattr(module, 'log', logger)
 
 def make(name, level=logging.WARNING, formatter=None, handler=None):
     """ Logging init. Default configuration is for extended traceback information (useful for server) logging. """
