@@ -47,6 +47,7 @@ class Foot(object):
                 xlib.EventName.ConfigureNotify:     self.handle_configurenotify,
                 xlib.EventName.ConfigureRequest:    self.handle_configurerequest,
                 xlib.EventName.DestroyNotify:       self.handle_destroynotify,
+                xlib.EventName.EnterNotify:         self.handle_enternotify,
                 xlib.EventName.FocusIn:             self.handle_focusin,
                 xlib.EventName.FocusOut:            self.handle_focusout,
                 xlib.EventName.MapNotify:           self.handle_mapnotify,
@@ -140,6 +141,10 @@ class Foot(object):
             else:
                 self._desktop.unmanagewindow(win)
 
+    def handle_enternotify(self, event):
+        #e = event.xcrossing
+        log.debug('0x%08x: EnterNotify', event.xany.window)
+
     def handle_focusin(self, event):
         e = event.xfocus
         log.debug('0x%08x: focusin mode=%s detail=%s', e.window, e.mode, e.detail)
@@ -151,9 +156,9 @@ class Foot(object):
     def handle_mapnotify(self, event):
         # Server has displayed the window.
         e = event.xmap
+        log.debug('0x%08x: MapNotify event=0x%08x override_redirect=%s', e.window, e.event, e.override_redirect)
         # Only handle if the notify event not caused by a sub-structure redirect.
         if e.event == e.window:
-            log.debug('0x%08x: MapNotify event=0x%08x override_redirect=%s', e.window, e.event, e.override_redirect)
             # Add a WM_STATE property to the window. See ICCCM 4.1.3.1
             try:
                 win = self.root.children[e.window]
@@ -165,10 +170,11 @@ class Foot(object):
     def handle_maprequest(self, event):
         # A window has requested that it be shown.
         windowid = event.xmaprequest.window
+        log.debug('0x%08x: MapRequest', windowid)
         try:
             win = self.root.children[windowid]
         except KeyError:
-            log.error('0x%08x: MapRequest for unknown window!!!', w)
+            log.error('0x%08x: MapRequest for unknown window!!!', windowid)
         else:
             self._desktop.managewindow(win)
 
@@ -186,6 +192,7 @@ class Foot(object):
 
     def handle_unmapnotify(self, event):
         e = event.xunmap
+        log.debug('0x%08x: UnmapNotify', e.window)
         if e.send_event:
             # The UnmapNotify is because client called something like XWithdrawWindow or XIconifyWindow.
             # Unmap the window, but remove when the xserver sends another UnmapNotify message with send_event=False.
