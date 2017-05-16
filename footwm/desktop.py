@@ -245,7 +245,7 @@ class Desktop:
             w.resize(self.root.geom)
             w.show()
             self.root.activewindow = w
-            log.debug('0x%08x: showing window=%s', w.window, w)
+            w.focus()
         # Hide every window that's not in the family of windows.
         for w in self.windowlist:
             if w not in family:

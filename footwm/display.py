@@ -70,6 +70,22 @@ class Geometry(object):
     def __str__(self):
         return '{}(x={}, y={}, w={}, h={})'.format(self.__class__.__name__, self.x, self.y, self.w, self.h)
 
+class WmHints:
+
+    def __init__(self, cwmhints):
+        # Only interested in the input and urgency values.
+        if cwmhints.flags.value & xlib.HintsFlags.Input:
+            self.input_ = cwmhints.input_
+        else:
+            self.input_ = None
+        if cwmhints.flags.value & xlib.HintsFlags.XUrgency:
+            self.urgency = True
+        else:
+            self.urgency = False
+
+    def __str__(self):
+        return "{}(input={} urgency={})".format(self.__class__.__name__, self.input_, self.urgency)
+
 class SizeHints:
 
     def __init__(self, csizehints):
@@ -272,6 +288,15 @@ class Display:
                 self.free(xtp.value)
         return name
 
+    def getwmhints(self, win):
+        cwmhints_p = xlib.xlib.XGetWMHints(self.xh, win.window)
+        if cwmhints_p:
+            wmhints = WmHints(cwmhints_p.contents)
+            self.free(cwmhints_p)
+        else:
+            wmhints = None
+        return wmhints
+
     def getwmnormalhints(self, win):
         # Use XAllocSizeHints as the size hints structure may change (but not likely), but must be free'd.
         cpsizehints = xlib.xlib.XAllocSizeHints(None)
@@ -421,7 +446,7 @@ class Display:
         status = xlib.xlib.XSendEvent(self.xh, window.window, False, eventtype, ctypes.cast(ctypes.byref(event), xlib.xevent_p))
         return status != 0
 
-    def setinputfocus(self, window, revertto, time):
+    def setinputfocus(self, window, revertto, time=xlib.CurrentTime):
         xlib.xlib.XSetInputFocus(self.xh, window.window, revertto, time)
 
     def gettextproperty(self, window, propertyname):

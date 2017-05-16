@@ -143,6 +143,11 @@ class Base:
         except AttributeError:
             pass
         try:
+            if self.wmhints:
+                args.append('wmhints={}'.format(self.wmhints))
+        except AttributeError:
+            pass
+        try:
             if self.sizehints:
                 args.append('sizehints={}'.format(self.sizehints))
         except AttributeError:
@@ -197,7 +202,7 @@ class WmWindowClientWindow(ewmh.WmWindowClientWindowMixin, Base):
         wm_state = self.wm_state
         self.res_name, self.res_class = self.wm_class
 
-    def _sendclientmessage(self, atom, time):
+    def _sendclientmessage(self, atom, time_):
         """ Send a ClientMessage event to window. """
         ev = xlib.XClientMessageEvent()
         ev.type = xlib.EventName.ClientMessage
@@ -205,14 +210,14 @@ class WmWindowClientWindow(ewmh.WmWindowClientWindowMixin, Base):
         ev.message_type = self.display.atom['WM_PROTOCOLS']
         ev.format = 32
         ev.data.l[0] = atom
-        ev.data.l[1] = time
+        ev.data.l[1] = time_
         return self.display.sendevent(self, ev)
 
-    def clientmessage(self, msg, time=xlib.CurrentTime):
+    def clientmessage(self, msg, time_=xlib.CurrentTime):
         """ Send a ClientMessage event to client.
         Will raise a KeyError if WM_PROTOCOLS does not support the msg type. """
-        atom = self.wm_protocols[msg]
-        status = self._sendclientmessage(atom, time)
+        atom = self.display.atom[msg]
+        status = self._sendclientmessage(atom, time_)
         if status:
             log.debug('0x%08x: %s success', self.window, msg)
         else:
@@ -252,6 +257,11 @@ class WmWindowClientWindow(ewmh.WmWindowClientWindowMixin, Base):
 
     @property
     @utils.memoise
+    def wmhints(self):
+        return self.display.getwmhints(self)
+
+    @property
+    @utils.memoise
     def wm_protocols(self):
         """ Return dict(name -> atom) of ATOMs comprising supported WM_PROTOCOLS for the client window. """
         return self.display.getprotocols(self)
@@ -278,17 +288,27 @@ class WmWindow(ewmh.WmWindowMixin, WmWindowClientWindow):
         self.display.unmapwindow(self.window)
 
     def show(self):
+        log.debug('0x%08x: show window=%s', self.window, self)
         self.display.mapwindow(self)
 
     def focus(self):
-        log.debug('0x%08x: focus', self.window)
-        msg = 'WM_TAKE_FOCUS'
+        # ICCCM 4.1.7 Input Focus
+        # There are 4 input modes, so try and account for them.
         try:
-            self.clientmessage(msg)
-            # XXX Why a KeyError exception here????
-        except KeyError:
-            #log.debug('0x%08x: %s not supported', self.window, msg)
-            self.display.setinputfocus(self, xlib.InputFocus.RevertToPointerRoot, xlib.CurrentTime)
+            willtakefocus = 'WM_TAKE_FOCUS' in self.wm_protocols
+        except TypeError:
+            willtakefocus = False
+        input_ = self.wmhints.input_
+        log.debug('0x%08x: focus input=%s takefocus=%s', self.window, input_, willtakefocus)
+        if input_:
+            # Requires WM help in setting focus.
+            # Despite what ICCCM 4.1.7 says, I can only get focus to work if time is set to xlib.CurrentTime!
+            if willtakefocus:
+                # Locally active client.
+                self.clientmessage('WM_TAKE_FOCUS')
+            else:
+                # Passive client.
+                self.display.setinputfocus(self, xlib.InputFocus.RevertToPointerRoot)
 
     @property
     def wm_state(self):

@@ -74,30 +74,30 @@ class Foot(object):
     def handle_createnotify(self, event):
         # New window has been created.
         e = event.xcreatewindow
-        self.root.newchild(e.window)
-        log.debug('0x%08x: CreateNotify parent=0x%08x override_redirect=%s', e.window, e.parent, e.override_redirect)
+        if not e.override_redirect:
+            self.root.newchild(e.window)
+        log.debug('0x%08x: CreateNotify parent=0x%08x override_redirect=%s childwin=%s', e.window, e.parent, e.override_redirect, self.root.children.get(e.window, None))
 
     def handle_configurenotify(self, event):
         # The X server has moved and/or resized window e.window
         e = event.xconfigure
-        # Only handle if the notify event not caused by a sub-structure redirect.
-        if e.event == e.window:
-            # This block of code resizes the window if it's still not at the ideal geometry.
-            geom = display.Geometry(e)
-            log.debug('0x%08x: ConfigureNotify %s', e.window, geom)
-            try:
-                win = self.root.children[e.window]
-            except KeyError:
-                pass
+        log.debug('0x%08x: ConfigureNotify event=0x%08x', e.window, e.event)
+        # This block of code resizes the window if it's still not at the ideal geometry.
+        geom = display.Geometry(e)
+        log.debug('0x%08x: ConfigureNotify %s', e.window, geom)
+        try:
+            win = self.root.children[e.window]
+        except KeyError:
+            pass
+        else:
+            win.geom = geom
+            if win.wantedgeom == geom:
+                log.debug('0x%08x: current dimensions are good, no need to request again', e.window)
             else:
-                win.geom = geom
-                if win.wantedgeom == geom:
-                    log.debug('0x%08x: current dimensions are good, no need to request again', e.window)
-                else:
-                    # Window is not the size we want, make a configure request.
-                    wg = win.wantedgeom
-                    log.debug('0x%08x: requesting again, wanted %s current %s', e.window, win.wantedgeom, win.geom)
-                    self.display.moveresizewindow(win, wg.x, wg.y, wg.w, wg.h)
+                # Window is not the size we want, make a configure request.
+                wg = win.wantedgeom
+                log.debug('0x%08x: requesting again, wanted %s current %s', e.window, win.wantedgeom, win.geom)
+                self.display.moveresizewindow(win, wg.x, wg.y, wg.w, wg.h)
 
     def handle_configurerequest(self, event):
         # Some other client tried to reconfigure e.window

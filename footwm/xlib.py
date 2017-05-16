@@ -65,6 +65,8 @@ XID = ctypes.c_ulong
 Cardinal = ctypes.c_uint
 Colormap = XID
 Window = XID
+# Pixmap == CARD32, should be Cardinal but I can't find an exact #define..
+Pixmap = Cardinal
 Time = ctypes.c_ulong
 Status = ctypes.c_int
 
@@ -772,6 +774,41 @@ xlib.XUngrabKey.argtypes = display_p, KeyCode, GrabKeyModifierMask, Window
 # char *XKeysymToString(KeySym keysym);
 #xlib.XKeysymToString.restype = char_p
 #xlib.XKeysymToString.argtypes = KeySym,
+
+# See Xutil.h
+class HintsFlags(ctypes.c_long, metaclass=BitmapMetaMaker(ctypes.c_long)):
+    _bits_ = [
+        ('Input',		(1 << 0)),
+        ('State',		(1 << 1)),
+        ('IconPixmap',		(1 << 2)),
+        ('IconWindow',		(1 << 3)),
+        ('IconPosition',	(1 << 4)),
+        ('IconMask',		(1 << 5)),
+        ('WindowGroup',		(1 << 6)),
+        ('XUrgency',		(1 << 8)),
+        ]
+
+class WMHints(ctypes.Structure):
+    _fields_ = [
+        ('flags', HintsFlags),
+        ('input_', Bool),
+        ('initial_state', WmStateState),
+        ('icon_pixmap', Pixmap),
+        ('icon_window', Window),
+        ('icon_x', ctypes.c_int),
+        ('icon_y', ctypes.c_int),
+        ('icon_mask', Pixmap),
+        ('window_group', XID),
+        ]
+
+    def __str__(self):
+        return '{}({})'.format(self.__class__.__name__, ' '.join('{}={}'.format(name, str(getattr(self, name))) for name, _ in self._fields_))
+
+wmhints_p = ctypes.POINTER(WMHints)
+
+# XWMHints *XGetWMHints(Display *display, Window w);
+xlib.XGetWMHints.restype = wmhints_p
+xlib.XGetWMHints.argtypes = display_p, Window
 
 # See Xutil.h
 class SizeFlags(ctypes.c_long, metaclass=BitmapMetaMaker(ctypes.c_long)):
