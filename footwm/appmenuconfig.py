@@ -19,7 +19,7 @@ menuconfig.addkey('f', label='Firefox', action=run('firefox'), keymapname='apps'
 
 ## Search menu.
 searchcolumn = ('term', "Search term")
-menuconfig.addkey('d', label='Duck Duck Go', action=runform('surfraw duckduckgo "{term}"', fields=[searchcolumn]), keymapname='search')
-menuconfig.addkey('i', label='IMDB', action=runform('surfraw imdb "{term}"', fields=[searchcolumn]), keymapname='search')
-menuconfig.addkey('s', label='Surfraw search', action=runform('surfraw {engine} "{term}"', fields=[('engine', 'Engine'), searchcolumn]), keymapname='search')
-menuconfig.addkey('w', label='wikipedia', action=runform('surfraw wikipedia "{term}"', fields=[searchcolumn]), keymapname='search')
+menuconfig.addkey('d', label='Duck Duck Go', action=runform('surfraw duckduckgo {term}', fields=[searchcolumn]), keymapname='search')
+menuconfig.addkey('i', label='IMDB', action=runform('surfraw imdb {term}', fields=[searchcolumn]), keymapname='search')
+menuconfig.addkey('s', label='Surfraw search', action=runform('surfraw {engine} {term}', fields=[('engine', 'Engine'), searchcolumn]), keymapname='search')
+menuconfig.addkey('w', label='wikipedia', action=runform('surfraw wikipedia {term}', fields=[searchcolumn]), keymapname='search')
