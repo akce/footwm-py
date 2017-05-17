@@ -301,17 +301,22 @@ class WmWindow(ewmh.WmWindowMixin, WmWindowClientWindow):
             willtakefocus = 'WM_TAKE_FOCUS' in self.wm_protocols
         except TypeError:
             willtakefocus = False
-        input_ = self.wmhints.input_
-        log.debug('0x%08x: focus input=%s takefocus=%s', self.window, input_, willtakefocus)
-        if input_:
-            # Requires WM help in setting focus.
-            # Despite what ICCCM 4.1.7 says, I can only get focus to work if time is set to xlib.CurrentTime!
-            if willtakefocus:
-                # Locally active client.
-                self.clientmessage('WM_TAKE_FOCUS')
-            else:
-                # Passive client.
-                self.display.setinputfocus(self, xlib.InputFocus.RevertToPointerRoot)
+        try:
+            input_ = self.wmhints.input_
+        except AttributeError:
+            # I've had a case (fluid -> file->Open...) where wmhints is None.
+            pass
+        else:
+            log.debug('0x%08x: focus input=%s takefocus=%s', self.window, input_, willtakefocus)
+            if input_:
+                # Requires WM help in setting focus.
+                # Despite what ICCCM 4.1.7 says, I can only get focus to work if time is set to xlib.CurrentTime!
+                if willtakefocus:
+                    # Locally active client.
+                    self.clientmessage('WM_TAKE_FOCUS')
+                else:
+                    # Passive client.
+                    self.display.setinputfocus(self, xlib.InputFocus.RevertToPointerRoot)
 
     @property
     def wm_state(self):
