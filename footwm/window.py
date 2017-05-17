@@ -40,6 +40,7 @@ eg,
 import collections
 
 from . import command
+from . import display
 from . import ewmh
 from . import log as xlog
 from . import utils
@@ -52,8 +53,11 @@ class WindowError(Exception):
 
 def centregeom(geom, availablegeom):
     """ A new geometry such that the x,y coords centre the geom.width/height in the availablegeom. """
-    # XXX TODO
-    return geom
+    # Width / x
+    x = max(int((availablegeom.w - geom.w) / 2), 0)
+    # Height / y
+    y = max(int((availablegeom.h - geom.h) / 2), 0)
+    return display.Geometry(display.Geomtuple(x, y, geom.w, geom.h))
 
 def fixedgeom(currentgeom, availablegeom, sizehints):
     try:
@@ -87,10 +91,9 @@ def brutalmaxsizer(currentgeom, availablegeom, sizehints):
     """ Brutal maxsizer sets the geometry to the maximum available space, irrespective of sizehints. """
     return availablegeom
 
-def transientsizer(currentgeom, availablegeom, sizehints):
+def transientsizer(windowgeom, rootgeom, sizehints):
     """ Transient sizer centres position in the available geometry but width/height are unchanged from sizehints. """
-    # TODO just return as honourable max sizer.
-    return honourablemaxsizer(currentgeom, availablegeom, sizehints)
+    return centregeom(windowgeom, rootgeom)
 
 class Base:
 
