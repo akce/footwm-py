@@ -63,7 +63,9 @@ class Model:
             self.editeventmap = {kid: functools.partial(self.insertchar, chr(kid)) for kid in range(1, 255) if cascii.isprint(kid)}
             # Add control characters.
             self.editeventmap[curses.KEY_DC] = self.delete
+            self.editeventmap[cascii.BS] = self.backspace
             self.editeventmap[cascii.DEL] = self.backspace
+            self.editeventmap[curses.KEY_BACKSPACE] = self.backspace
             self.editeventmap[cascii.TAB] = self.editnextcolumn
             self.editeventmap[curses.KEY_LEFT] = functools.partial(self.cursormove, -1)
             self.editeventmap[curses.KEY_RIGHT] = functools.partial(self.cursormove, 1)
