@@ -75,7 +75,7 @@ def fixedgeom(currentgeom, availablegeom, sizehints):
 def honourablemaxsizer(currentgeom, availablegeom, sizehints):
     """ Honourable max sizer tries to maximise the window but honours sizehints while doing it. """
     size = None
-    if sizehints.flags.value == xlib.SizeFlags.PSize:
+    if sizehints and sizehints.flags.value == xlib.SizeFlags.PSize:
         # Seems to be set when the window is already at the correct size.
         size = centregeom(currentgeom, availablegeom)
     if size is None:
