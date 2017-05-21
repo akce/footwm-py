@@ -1,10 +1,10 @@
 # Default configuration for appmenu.
 
-TERMINAL = 'xterm'
+TERMINAL = 'xterm -tn xterm-256color '
 
 # XXX should this be done all in python rather than calling the footmenu script?
-DESKTOPMENU = TERMINAL + ' -e footmenu d'
-WINDOWMENU = TERMINAL + ' -e footmenu w'
+DESKTOPMENU = TERMINAL + '-e footmenu d'
+WINDOWMENU = TERMINAL + '-e footmenu w'
 
 # Main/root menu.
 menuconfig.addkey('a', label='Applications submenu', action=setmenu('apps'))
