@@ -8,31 +8,30 @@ import logging
 import sys
 
 def addargs(parser):
-    parser.add_argument('--logspec', help='comma separated list of package.module:loglevel specifiers. eg, footwm.display:debug,footwm.ewmh:info')
-    parser.add_argument('--outfile', help='Write log messages to this file. Default: stdout')
+    parser.add_argument('--logmodules', nargs='+', default=[], help='list of package.module names.')
+    parser.add_argument('--loglevel', choices=['debug', 'info', 'warn', 'error', 'critical'], default='debug', help='comma separated list of package.module names. eg, footwm.display,footwm.ewmh')
+    parser.add_argument('--logfile', help='Write log messages to this file. Default: stdout')
 
-def configlogging(logspec, outfilename=None):
-    # Configure a filehandler if given an outfilename.
-    try:
-        mods = logspec.split(',')
-    except AttributeError:
-        pass
+def startlogging(modulenames, levelname='info', outfilename=None):
+    with open('/tmp/logimp.log', 'w') as f:
+        print('startlogging: lvl={} out={} mods={}'.format(levelname, outfilename, modulenames), file=f)
+    # XXX Should we stop existing logging first?
+    if outfilename:
+        h = logging.FileHandler(outfilename)
     else:
-        if outfilename:
-            h = logging.FileHandler(outfilename)
-        else:
-            h = logging.StreamHandler()
-        for m in mods:
-            try:
-                mod, lvlname = m.split(':')
-            except ValueError:
-                mod = m
-                # Default to INFO level logging if the module is present.
-                lvlname = 'info'
-            lvl = getattr(logging, lvlname.upper())
-            logger = make(name=mod, level=lvl, handler=h)
-            module = sys.modules[mod]
-            setattr(module, 'log', logger)
+        h = logging.StreamHandler()
+    for mod in modulenames:
+        lvl = getattr(logging, levelname.upper())
+        logger = make(name=mod, level=lvl, handler=h)
+        module = sys.modules[mod]
+        setattr(module, 'log', logger)
+
+def stoplogging():
+    h = logging.NullHandler()
+    for name, mod in sys.modules.items():
+        if hasattr(mod, 'log'):
+            # Replace with non-logging version.
+            setattr(mod, 'log', make(name=name, handler=h))
 
 def make(name, level=logging.WARNING, formatter=None, handler=None):
     """ Logging init. Default configuration is for extended traceback information (useful for server) logging. """

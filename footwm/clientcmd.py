@@ -85,6 +85,12 @@ class ClientCommand:
             win = None
         return win
 
+    def startlogging(self, modulenames, levelname, outfilename):
+        self.root.startlogging(modulenames=modulenames, levelname=levelname, outfilename=outfilename)
+
+    def stoplogging(self):
+        self.root.stoplogging()
+
 def makedisplayroot(displayname=None):
     displayobj = display.Display(displayname)
     log.debug('Connect name=%s display=%s', displayname, displayobj)

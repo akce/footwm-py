@@ -54,6 +54,12 @@ class FootShell:
     def desktop_select(self, args):
         self.client.selectdesktop(index=args.index)
 
+    def logging_start(self, args):
+        self.client.startlogging(modulenames=['footwm.{}'.format(m) for m in args.modules if not m.startswith('footwm.')], levelname=args.level, outfilename=args.logfile)
+
+    def logging_stop(self, args):
+        self.client.stoplogging()
+
 def make_argparser(footsh):
     winparser = argparse.ArgumentParser(add_help=False)
     winparser.add_argument('--created', default=False, action='store_true', help='windows in creation order. Default: windows in stacking order.')
@@ -78,6 +84,16 @@ def make_argparser(footsh):
         with desks('select', aliases=['s', 'sel'], parents=[winparser], help='select desktop') as desksel:
             desksel.add_argument('index', type=int, default=0, help='0 based index of desktop to select')
             desksel.set_defaults(command=footsh.desktop_select)
+    with commands('log', aliases=['l'], help='debugging and logging') as c:
+        lconf = nestedarg.NestedSubparser(c.add_subparsers())
+        with lconf('start', aliases=['a', 's'], help='Start logging module(s)') as lstart:
+            lstart.add_argument('--logfile', default='/tmp/footwm.log', help='output file. Default: %(default)s')
+            lstart.add_argument('--level', choices=['debug', 'info', 'error', 'warning'], default='debug', help='log level. Default: %(default)s')
+            lstart.add_argument('modules', nargs='+', help='module(s) to debug. Omit the leading footwm. eg, Use only desktop window textui.listbox.')
+            lstart.set_defaults(command=footsh.logging_start)
+        with lconf('stop', aliases=['r'], help='Stop logging module(s)') as lstop:
+            lstop.add_argument('name', nargs='*', help='module(s) to stop logging. Leave empty to stop all logging.')
+            lstop.set_defaults(command=footsh.logging_stop)
     with commands('windows', aliases=['w', 'win'], help='windows') as c:
         wins = nestedarg.NestedSubparser(c.add_subparsers())
         with wins('ls', parents=[winparser], help='list windows') as winls:

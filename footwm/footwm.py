@@ -216,7 +216,7 @@ def parseargs():
     parser = argparse.ArgumentParser()
     footwm.log.addargs(parser)
     args = parser.parse_args()
-    footwm.log.configlogging(args.logspec, args.outfile)
+    footwm.log.startlogging(modulenames=args.logmodules, levelname=args.loglevel, outfilename=args.logfile)
 
 def main():
     parseargs()

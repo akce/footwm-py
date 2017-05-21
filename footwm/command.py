@@ -40,6 +40,12 @@ class ClientRootMixin(Base):
     def renamedesktop(self, index, newname):
         self.footcommand = ['desktop', 'rename', str(index), newname]
 
+    def startlogging(self, modulenames, levelname, outfilename):
+        self.footcommand = ['log', 'start', outfilename, levelname] + modulenames
+
+    def stoplogging(self):
+        self.footcommand = ['log', 'stop']
+
 class WmCommandReader:
     """ Window Manager Root window interface. """
 
@@ -82,6 +88,14 @@ class WmCommandReader:
                 # Remove from desktop
                 # Remove from all desktops
                 pass
+            elif command == 'log':
+                if subcommand == 'start':
+                    # Start or reset logging on the given modules to the given logfile and level.
+                    logmodule.startlogging(modulenames=commandv[4:], levelname=commandv[3], outfilename=commandv[2])
+                elif subcommand == 'stop':
+                    # Stop all debug logging.
+                    # XXX Revert to default logging. eg, exceptions to a default file?
+                    logmodule.stoplogging()
             else:
                 # Unknown command.
                 pass
