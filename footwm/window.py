@@ -334,6 +334,9 @@ class WmWindow(ewmh.WmWindowMixin, WmWindowClientWindow):
         if self.wantedgeom != self.geom:
             log.debug('0x%08x: attempt resize %s -> %s', self.window, self.geom, self.wantedgeom)
             self.display.moveresizewindow(self, self.wantedgeom.x, self.wantedgeom.y, self.wantedgeom.w, self.wantedgeom.h)
+        else:
+            # Send a synthetic configure notify to the window?
+            log.debug('0x%08x: resize do nothing - geom is ideal %s', self.window, self.geom)
 
 class WmNormal(WmWindow):
 
