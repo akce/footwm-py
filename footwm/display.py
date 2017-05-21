@@ -147,6 +147,7 @@ class Display:
         self.atom[symbol] = xlib.xlib.XInternAtom(self.xh, bytes(symbol, 'utf8'), only_if_exists)
 
     def allowevents(self, aevents, time=xlib.CurrentTime):
+        log.debug('0x%08x: XAllowEvents aevents=%s', window.window, aevents)
         return xlib.xlib.XAllowEvents(self.xh, aevents, time)
 
     def changeproperty(self, window, propertyname, type_, format_, mode, data, nelements):
@@ -156,9 +157,10 @@ class Display:
             w = window
         return xlib.xlib.XChangeProperty(self.xh, w, self.atom[propertyname], type_, format_, mode, ctypes.cast(data, xlib.byte_p), nelements)
 
-    def configurewindow(self, window, changemask, windowchanges):
+    def configurewindow(self, windowid, changemask, windowchanges):
         # XXX Note that window is the number for now.
-        xlib.xlib.XConfigureWindow(self.xh, window, changemask, addr(windowchanges))
+        log.debug('0x%08x: XConfigureWindow', windowid)
+        xlib.xlib.XConfigureWindow(self.xh, windowid, changemask, addr(windowchanges))
 
     def createsimplewindow(self, parent, x, y, w, h, borderw, border, background):
         # XXX Should we wrap the return in a Window object?
@@ -170,6 +172,7 @@ class Display:
 
     def destroywindow(self, window):
         # XXX Note that window is the number for now.
+        log.debug('0x%08x: XDestroyWindow', window.window)
         xlib.xlib.XDestroyWindow(self.xh, window)
 
     @property
@@ -254,7 +257,7 @@ class Display:
                     aname = atomnames[aid]
                 except KeyError:
                     aname = self.getatomname(aid)
-                    #log.debug('0x%08x: Unsupported WM_PROTOCOL atom %s=%d', window.window, aname, aid)
+                    log.debug('0x%08x: Unsupported WM_PROTOCOL atom %s=%d', window.window, aname, aid)
                 protocols[aname] = aid
         return protocols
 
@@ -267,10 +270,10 @@ class Display:
             override_redirect = wa.override_redirect
             geom = Geometry(wa)
             map_state = wa.map_state.value
-            #log.debug('0x%08x: windowattr=%s', self.window, wa)
+            log.debug('0x%08x: windowattr=%s', windowid, wa)
             ret = override_redirect, geom, map_state
         else:
-            #log.debug('0x%08x: XGetWindowAttributes failed', self.window)
+            log.debug('0x%08x: XGetWindowAttributes failed', windowid)
             ret = None
         return ret
 
@@ -307,7 +310,7 @@ class Display:
             self.free(cpsizehints)
         else:
             hints = None
-        #log.debug("0x%08x: getwmnormalsizehints status=%d hints=%s", win.window, status, hints)
+        log.debug("0x%08x: getwmnormalsizehints status=%d hints=%s", win.window, status, hints)
         return hints
 
     def getwmstate(self, window):
@@ -345,7 +348,7 @@ class Display:
             if nitems_return.value > 0:
                 cardinal = ctypes.cast(prop_return, xlib.uint_p).contents.value
             self.free(prop_return)
-        #log.debug('0x%08x: getcardinalproperty %s llen=%d ret=%d', win.window, propname, llen, ret)
+        log.debug('0x%08x: getcardinalproperty %s llen=%d ret=%d', win.window, propname, llen, ret)
         return cardinal
 
     def setcardinalproperty(self, win, propname, value):
@@ -397,6 +400,7 @@ class Display:
         return ret
 
     def grabkey(self, keycode, modifiermask, grabwindow, ownerevents, pointermode, keyboardmode):
+        log.debug('0x%08x: XGrabKey keycode=%d modmask=0x%08x grabwindow=0x%08x', self.xh, keycode, modifiermask, grabwindow.window)
         xlib.xlib.XGrabKey(self.xh, keycode, modifiermask, grabwindow.window, ownerevents, pointermode, keyboardmode)
 
     def install(self, root, eventmask):
@@ -416,9 +420,11 @@ class Display:
             raise DisplayError('Another WM is running')
 
     def mapwindow(self, window):
+        log.debug('0x%08x: XMapWindow', window.window)
         xlib.xlib.XMapWindow(self.xh, window.window)
 
     def moveresizewindow(self, window, x, y, w, h):
+        log.debug('0x%08x: XMoveResizeWindow x=%d y=%d w=%d h=%d', window.window, x, y, w, h)
         xlib.xlib.XMoveResizeWindow(self.xh, window.window, x, y, w, h)
 
     @property
@@ -439,6 +445,7 @@ class Display:
         return children
 
     def selectinput(self, window, eventmask):
+        log.debug('0x%08x: XSelectInput eventmask=0x%0x', window.window, eventmask)
         xlib.xlib.XSelectInput(self.xh, window.window, eventmask)
 
     def sendevent(self, window, event, eventtype=xlib.InputEventMask.NoEvent):
@@ -447,6 +454,7 @@ class Display:
         return status != 0
 
     def setinputfocus(self, window, revertto, time=xlib.CurrentTime):
+        log.debug('0x%08x: XSetInputFocus', window.window)
         xlib.xlib.XSetInputFocus(self.xh, window.window, revertto, time)
 
     def gettextproperty(self, window, propertyname):
@@ -471,6 +479,7 @@ class Display:
             xlib.xlib.XFree(tp.value)
 
     def setwmstate(self, window, winstate):
+        log.debug('0x%08x: SetWMState state=0x%0x', window.window, winstate)
         state = xlib.WmState()
         state.state = xlib.WmStateState(winstate)
         state.icon = 0
@@ -481,6 +490,7 @@ class Display:
         xlib.xlib.XChangeProperty(self.xh, window.window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
 
     def sync(self, discard=False):
+        log.debug('0x%08x: XSync discard=%s', self.xh, discard)
         xlib.xlib.XSync(self.xh, discard)
 
     def strings_to_textprop(self, strings):
@@ -527,11 +537,13 @@ class Display:
         return lines
 
     def ungrabkey(self, keycode, modifiermask, grabwindow):
+        log.debug('0x%08x: XUngrabKey keycode=%d modmask=0x%0x grabwindow=0x%08x', self.xh, keycode, modifiermask, grabwindow.window)
         xlib.xlib.XUngrabKey(self.xh, keycode, modifiermask, grabwindow.window)
 
-    def unmapwindow(self, window):
+    def unmapwindow(self, windowid):
         # XXX window must be an actual windowid for now. There may still be cases where we need to unmap a window with no associated object.
-        xlib.xlib.XUnmapWindow(self.xh, window)
+        log.debug('0x%08x: XUnmapWindow', windowid)
+        xlib.xlib.XUnmapWindow(self.xh, windowid)
 
     def __del__(self):
         xlib.xlib.XCloseDisplay(self.xh)

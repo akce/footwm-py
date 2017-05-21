@@ -23,6 +23,6 @@ def xevent(display, eventhandlers):
     try:
         handler = eventhandlers[e.value]
     except KeyError:
-        log.error('unhandled event %s', e)
+        log.warn('unhandled event %s', e)
     else:
         handler(event)
