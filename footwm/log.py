@@ -13,8 +13,6 @@ def addargs(parser):
     parser.add_argument('--logfile', help='Write log messages to this file. Default: stdout')
 
 def startlogging(modulenames, levelname='info', outfilename=None):
-    with open('/tmp/logimp.log', 'w') as f:
-        print('startlogging: lvl={} out={} mods={}'.format(levelname, outfilename, modulenames), file=f)
     # XXX Should we stop existing logging first?
     if outfilename:
         h = logging.FileHandler(outfilename)
