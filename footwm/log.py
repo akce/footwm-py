@@ -12,8 +12,10 @@ def addargs(parser):
     parser.add_argument('--loglevel', choices=['debug', 'info', 'warn', 'error', 'critical'], default='debug', help='comma separated list of package.module names. eg, footwm.display,footwm.ewmh')
     parser.add_argument('--logfile', help='Write log messages to this file. Default: stdout')
 
-def startlogging(modulenames, levelname='info', outfilename=None):
-    # XXX Should we stop existing logging first?
+def startlogging(modulenames, levelname='info', outfilename=None, logobjname='log'):
+    # Note that we don't stop existing logging first. That way we
+    # don't stomp on any existing loggers. Must call stoplogging to
+    # actually clear.
     if outfilename:
         h = logging.FileHandler(outfilename)
     else:
@@ -22,7 +24,7 @@ def startlogging(modulenames, levelname='info', outfilename=None):
         lvl = getattr(logging, levelname.upper())
         logger = make(name=mod, level=lvl, handler=h)
         module = sys.modules[mod]
-        setattr(module, 'log', logger)
+        setattr(module, logobjname, logger)
 
 def stoplogging():
     h = logging.NullHandler()

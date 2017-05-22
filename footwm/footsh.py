@@ -55,7 +55,8 @@ class FootShell:
         self.client.selectdesktop(index=args.index)
 
     def logging_start(self, args):
-        self.client.startlogging(modulenames=['footwm.{}'.format(m) for m in args.modules if not m.startswith('footwm.')], levelname=args.level, outfilename=args.logfile)
+        modnames = [m if m.startswith('footwm.') else 'footwm.{}'.format(m) for m in args.modules]
+        self.client.startlogging(modulenames=modnames, levelname=args.level, outfilename=args.logfile)
 
     def logging_stop(self, args):
         self.client.stoplogging()

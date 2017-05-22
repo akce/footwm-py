@@ -3,18 +3,19 @@ Simple xevent generator.
 
 Copyright (c) 2016 Akce
 """
-
 from . import log as logger
 from . import xlib
 
-log = logger.make(name=__name__)
-
 def run(display, eventhandlers):
+    # Setup a logger that is always running so that we can catch unhandled exceptions.
+    # The logger will be module level elog object. Calling it elog so that it remains untouched by default invocations of
+    # startlogging and stoplogging.
+    logger.startlogging(modulenames=[__name__], levelname='error', outfilename='/tmp/footwmerrors.log', logobjname='elog')
     while True:
         try:
             xevent(display, eventhandlers)
         except Exception as e:
-            log.exception(e)
+            elog.exception(e)
 
 def xevent(display, eventhandlers):
     event = display.nextevent
@@ -23,6 +24,6 @@ def xevent(display, eventhandlers):
     try:
         handler = eventhandlers[e.value]
     except KeyError:
-        log.warn('unhandled event %s', e)
+        elog.warn('unhandled event %s', e)
     else:
         handler(event)
