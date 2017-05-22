@@ -2,6 +2,7 @@
 
 # Python standard modules.
 import argparse
+import os
 import time
 
 # Local modules.
@@ -20,9 +21,9 @@ def xinit(displayname=None):
 
 class AppMixin:
 
-    def __init__(self, client, showcurrent, msgduration=1.2):
+    def __init__(self, client, skipfirst, msgduration=1.2):
         self.client = client
-        self._offset = 0 if showcurrent else 1
+        self._offset = 1 if skipfirst else 0
         self._msgduration = msgduration
         self.scr = screen.Screen(self)
         self._model = self._makemodel()
@@ -82,8 +83,8 @@ class AppMixin:
 
 class DesktopApp(AppMixin):
 
-    def __init__(self, client, showcurrent, msgduration=1.2):
-        super().__init__(client, showcurrent, msgduration)
+    def __init__(self, client, skipfirst, msgduration=1.2):
+        super().__init__(client, skipfirst, msgduration)
 
     def _makemodel(self):
         desktops = self.client.getdesktopnames()[self._offset:]
@@ -111,16 +112,23 @@ class DesktopApp(AppMixin):
 
 class WindowApp(AppMixin):
 
-    def __init__(self, client, showcurrent, msgduration=1.2):
-        super().__init__(client, showcurrent, msgduration)
+    def __init__(self, client, skipfirst, msgduration=1.2):
+        super().__init__(client, skipfirst, msgduration)
 
     def _makemodel(self):
-        windows = self.client.getwindowlist()[self._offset:]
-        columns = [listbox.ListColumn(name='res', label='Resource'),
-                   listbox.ListColumn(name='cls', label='Class'),
-                   listbox.ListColumn(name='host', label='Host'),
-                   listbox.ListColumn(name='title', label='Title'),
-                   listbox.ListColumn(name='wid', label='Window', visible=False),
+        # Ignore window that houses footmenu.
+        # FIXME: call client.getwindowlist first so it initialises all root.children windows. Then client.activewindow will exist.
+        allwindows = self.client.getwindowlist()
+        selfwin = self.client.root.children[int(os.environ['WINDOWID'])]
+        currentwin = self.client.activewindow
+        currentset = frozenset([selfwin, currentwin])
+        windows = [w for w in allwindows if w not in currentset][self._offset:]
+        columns = [
+            listbox.ListColumn(name='wid', label='Window', visible=False),
+            listbox.ListColumn(name='res', label='Resource'),
+            listbox.ListColumn(name='cls', label='Class'),
+            listbox.ListColumn(name='host', label='Host'),
+            listbox.ListColumn(name='title', label='Title'),
             ]
         model = listbox.Model(rows=[{'res': w.resourcename, 'cls': w.resourceclass, 'host': w.clientmachine, 'title': w.name, 'wid': w.window} for w in windows], columns=columns)
         aw = self.client.activewindow
@@ -149,7 +157,7 @@ class WindowApp(AppMixin):
 
 def windowmenu(args):
     client, display, root = xinit(displayname=args.displayname)
-    app = WindowApp(client, showcurrent=args.showcurrent, msgduration=args.msgduration)
+    app = WindowApp(client, skipfirst=args.skipfirst, msgduration=args.msgduration)
     try:
         app.run()
     finally:
@@ -157,7 +165,7 @@ def windowmenu(args):
 
 def desktopmenu(args):
     client, display, root = xinit(displayname=args.displayname)
-    app = DesktopApp(client, showcurrent=args.showcurrent, msgduration=args.msgduration)
+    app = DesktopApp(client, skipfirst=args.skipfirst, msgduration=args.msgduration)
     try:
         app.run()
     finally:
@@ -167,7 +175,7 @@ def parse_args():
     dispparser = argparse.ArgumentParser(add_help=False)
     dispparser.add_argument('--displayname', help='X display name.')
     dispparser.add_argument('--msgduration', default=1.2, type=float, help='Seconds to show message window before actioning')
-    dispparser.add_argument('--showcurrent', default=False, action='store_true', help='Show current desktop/window')
+    dispparser.add_argument('--skipfirst', default=False, action='store_true', help='Skip first entry in window/desktop list. Default: %(default)s')
     dispparser.add_argument('--escapedelay', default=25, type=int, help='Set curses escape delay')
 
     parser = argparse.ArgumentParser()

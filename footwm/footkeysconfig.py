@@ -27,9 +27,9 @@ keyconfig.addkey('F8', action=do(client.selectdesktop, index=4))
 
 # Menus.
 # Window select menu.
-keyconfig.addkey('F9', action=do(run, TERMINAL + ' -e footmenu w'))
+keyconfig.addkey('F9', action=do(run, TERMINAL + ' -e footmenu w --skipfirst'))
 # Desktop select menu.
-keyconfig.addkey('F10', action=do(run, TERMINAL + ' -e footmenu d'))
+keyconfig.addkey('F10', action=do(run, TERMINAL + ' -e footmenu d --skipfirst'))
 
 keyconfig.addkey('F11', action=do(client.closewindow, stacking=stacking, index=0))
 keyconfig.addkey('F12', action=do(client.deletedesktop, index=0))
