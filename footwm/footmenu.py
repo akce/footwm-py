@@ -49,8 +49,21 @@ class AppMixin:
         self.scr.init()
         self._model.view = listbox.ListBox(model=self._model, parent=self.scr)
         self.scr.windows = [self._model.view]
+        self.exitonempty()
         self.scr.draw()
         self.scr.run()
+
+    def showmessage(self, content, title, parent=None):
+        msg = msgwin.Message(lines=content, parent=parent or self.scr, title=title)
+        self.scr.windows.append(msg)
+        self.scr.draw()
+        time.sleep(self._msgduration)
+        self.scr.windows.remove(msg)
+
+    def exitonempty(self):
+        if len(self._model.rows) == 0:
+            self.showmessage(content=['Nothing to do'], title='Exiting..')
+            self.stop()
 
     def stop(self):
         self.scr.running = False
@@ -85,11 +98,7 @@ class DesktopApp(AppMixin):
         row = self._model.selected
         deskname = row['desk']
         desknum = int(row['desknum'])
-        msg = msgwin.Message(lines=[deskname], parent=self.scr, title='Selecting')
-        self.scr.windows.append(msg)
-        self.scr.draw()
-        time.sleep(self._msgduration)
-        self.scr.windows.remove(msg)
+        self.showmessage(content=[deskname], title='Selecting')
         self.client.selectdesktop(desknum)
         self.scr.draw()
         self.stop()
@@ -126,11 +135,7 @@ class WindowApp(AppMixin):
         row = self._model.selected
         winname = row['title']
         wid = int(row['wid'])
-        msg = msgwin.Message(lines=[winname], parent=self.scr, title='Activating')
-        self.scr.windows.append(msg)
-        self.scr.draw()
-        time.sleep(self._msgduration)
-        self.scr.windows.remove(msg)
+        self.showmessage(content=[winname], title='Activating')
         self.client.activatewindow(window=wid)
         self.scr.draw()
         self.stop()

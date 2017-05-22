@@ -16,6 +16,7 @@ class Screen(object):
     def __init__(self, app):
         self.app = app
         self._running = threading.Event()
+        self.running = True
 
     def init(self):
         ## ** Taken from curses.wrapper()
@@ -82,7 +83,6 @@ class Screen(object):
     def run(self):
         try:
             self.init()
-            self.running = True
             while self.running:
                 self.handle_input()
         finally:
