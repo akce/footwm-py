@@ -93,13 +93,7 @@ class FootKeys:
             log.error('X Error: %s', xerrorevent)
             return 0
         self.display.errorhandler = xerrorhandler
-        self._makehandlers()
-
-    def _makehandlers(self):
-        self.eventhandlers = {
-                xlib.EventName.KeyPress:            self._handle_keypress,
-                xlib.EventName.MappingNotify:       self._handle_mappingnotify,
-                }
+        self.xwatch = xevent.XWatch(self.display, self.root, self)
 
     def config(self):
         # Creating the KeyBuilder as a separate object so that the only way to
@@ -149,10 +143,8 @@ class FootKeys:
             log.debug('0x%08x: install keygrab keycode=0x%x modifier=0x%x', self.root.window, keycode, keymodmask)
             self.display.grabkey(keycode, keymodmask, self.root, True, xlib.GrabMode.Async, xlib.GrabMode.Async)
 
-    def _handle_keypress(self, event):
+    def handle_keypress(self, e):
         """ User has pressed a key that we've grabbed. """
-        e = event.xkey
-        log.debug('0x%08x: handle_keypress keycode=0x%x modifiers=%s', e.window, e.keycode, e.state.value)
         # Retrieve key action and call.
         keycombo = (e.keycode, e.state.value)
         if keycombo in self._keycodeactions:
@@ -161,7 +153,7 @@ class FootKeys:
         else:
             log.error('0x%08x: no action defined for (keycode, modifier) %s', e.window, keycombo)
 
-    def _handle_mappingnotify(self, event):
+    def handle_mappingnotify(self, event):
         """ X server has had a keyboard mapping changed. Update our keyboard layer. """
         self._rebuild()
 
@@ -197,6 +189,6 @@ def main():
         gl['do'] = functools.partial
         config.loadconfig(getconfigfilename(args), gl, locals())
     try:
-        xevent.run(fk.display, fk.eventhandlers)
+        xevent.run(fk.xwatch, logfilename='/tmp/footkeyserrors.log')
     finally:
         fk.clearkeymap()

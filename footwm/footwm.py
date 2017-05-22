@@ -36,53 +36,23 @@ class Foot(object):
             log.error('X Error: %s', xerrorevent)
             return 0
         self.display.errorhandler = xerrorhandler
-        self._makehandlers()
+        self.xwatch = xevent.XWatch(self.display, self.root, self)
         self._desktop = desktop.Desktop(self.display, self.root)
         self._desktop.redraw()
 
-    def _makehandlers(self):
-        self.eventhandlers = {
-                xlib.EventName.ClientMessage:       self.handle_clientmessage,
-                xlib.EventName.CreateNotify:        self.handle_createnotify,
-                xlib.EventName.ConfigureNotify:     self.handle_configurenotify,
-                xlib.EventName.ConfigureRequest:    self.handle_configurerequest,
-                xlib.EventName.DestroyNotify:       self.handle_destroynotify,
-                xlib.EventName.EnterNotify:         self.handle_enternotify,
-                xlib.EventName.FocusIn:             self.handle_focusin,
-                xlib.EventName.FocusOut:            self.handle_focusout,
-                xlib.EventName.MapNotify:           self.handle_mapnotify,
-                xlib.EventName.MapRequest:          self.handle_maprequest,
-                xlib.EventName.PropertyNotify:      self.handle_propertynotify,
-                xlib.EventName.UnmapNotify:         self.handle_unmapnotify,
-                }
-
-    def noop(self, event):
-        log.debug('noop %s', xlib.EventName(event.type))
-
-    def handle_clientmessage(self, event):
-        e = event.xclient
-        try:
-            msg = self.display.atom[e.message_type]
-        except KeyError:
-            msg = self.display.getatomname(e.message_type)
-        log.debug('0x%08x: handle_clientmessage msgid=%d name=%s', e.window, e.message_type, msg)
+    def handle_clientmessage(self, e):
         try:
             win = self.root.children[e.window]
         except KeyError:
             win = None
         self._desktop.handle_clientmessage(e.message_type, e, win=win)
 
-    def handle_createnotify(self, event):
+    def handle_createnotify(self, e):
         # New window has been created.
-        e = event.xcreatewindow
         if not e.override_redirect:
             self.root.newchild(e.window)
-        log.debug('0x%08x: CreateNotify parent=0x%08x override_redirect=%s childwin=%s', e.window, e.parent, e.override_redirect, self.root.children.get(e.window, None))
 
-    def handle_configurenotify(self, event):
-        # The X server has moved and/or resized window e.window
-        e = event.xconfigure
-        log.debug('0x%08x: ConfigureNotify event=0x%08x', e.window, e.event)
+    def handle_configurenotify(self, e):
         # This block of code resizes the window if it's still not at the ideal geometry.
         geom = display.Geometry(e)
         log.debug('0x%08x: ConfigureNotify %s', e.window, geom)
@@ -100,12 +70,10 @@ class Foot(object):
                 log.debug('0x%08x: requesting again, wanted %s current %s', e.window, win.wantedgeom, win.geom)
                 self.display.moveresizewindow(win, wg.x, wg.y, wg.w, wg.h)
 
-    def handle_configurerequest(self, event):
-        # Some other client tried to reconfigure e.window
+    def handle_configurerequest(self, e):
         # NOTE: Allow all configure requests, even if their dimensions are not what we want.
         # Most clients get slow and behave weird if they don't get their way, so we'll honour all
         # requests but we'll request the dimensions we want in the callback configure notify handler.
-        e = event.xconfigurerequest
         geom = display.Geometry(e)
         log.debug('0x%08x: ConfigureRequest parent=0x%08x %s %s', e.window, e.parent, geom, e.value_mask)
         wc = xlib.XWindowChanges()
@@ -128,49 +96,30 @@ class Foot(object):
         if changemask:
             self.display.configurewindow(e.window, changemask, wc)
 
-    def handle_destroynotify(self, event):
-        # Window has been destroyed.
-        e = event.xdestroywindow
+    def handle_destroynotify(self, destroywindowevent):
         # Only handle if the notify event not caused by a sub-structure redirect.
-        if e.event == e.window:
-            log.debug('0x%08x: DestroyNotify event=0x%08x', e.window, e.event)
+        if destroywindowevent.event == destroywindowevent.window:
             try:
-                win = self.root.children[e.window]
+                win = self.root.children[destroywindowevent.window]
             except KeyError:
-                log.debug('0x%08x: not found in root %s', e.window, self.root)
+                log.debug('0x%08x: not found in root %s', destroywindowevent.window, self.root)
             else:
                 self._desktop.unmanagewindow(win)
 
-    def handle_enternotify(self, event):
-        #e = event.xcrossing
-        log.debug('0x%08x: EnterNotify', event.xany.window)
-
-    def handle_focusin(self, event):
-        e = event.xfocus
-        log.debug('0x%08x: focusin mode=%s detail=%s', e.window, e.mode, e.detail)
-
-    def handle_focusout(self, event):
-        e = event.xfocus
-        log.debug('0x%08x: focusout mode=%s detail=%s', e.window, e.mode, e.detail)
-
-    def handle_mapnotify(self, event):
-        # Server has displayed the window.
-        e = event.xmap
-        log.debug('0x%08x: MapNotify event=0x%08x override_redirect=%s', e.window, e.event, e.override_redirect)
+    def handle_mapnotify(self, mapevent):
         # Only handle if the notify event not caused by a sub-structure redirect.
-        if e.event == e.window:
+        if mapevent.event == mapevent.window:
             # Add a WM_STATE property to the window. See ICCCM 4.1.3.1
             try:
-                win = self.root.children[e.window]
+                win = self.root.children[mapevent.window]
             except KeyError:
-                log.error('0x%08x: window not found, cannot set WM_STATE=Normal', e.window)
+                log.error('0x%08x: window not found, cannot set WM_STATE=Normal', mapevent.window)
             else:
                 win.wm_state = xlib.WmStateState.Normal
 
-    def handle_maprequest(self, event):
+    def handle_maprequest(self, maprequestevent):
         # A window has requested that it be shown.
-        windowid = event.xmaprequest.window
-        log.debug('0x%08x: MapRequest', windowid)
+        windowid = maprequestevent.window
         try:
             win = self.root.children[windowid]
         except KeyError:
@@ -178,33 +127,23 @@ class Foot(object):
         else:
             self._desktop.managewindow(win)
 
-    def handle_propertynotify(self, event):
+    def handle_propertynotify(self, propertyevent, atomname):
         """ Property on the root window has changed. """
-        e = event.xproperty
-        for k, v in self.display.atom.items():
-            if v == e.atom:
-                atomname = k
-                break
-        else:
-            atomname = 'Unknown'
-        log.debug('0x%08x: PropertyNotify %s:%d send_event=%s', e.window, atomname, e.atom, e.send_event)
-        self._desktop.handle_propertynotify(e.atom)
+        self._desktop.handle_propertynotify(propertyevent.atom)
 
-    def handle_unmapnotify(self, event):
-        e = event.xunmap
-        log.debug('0x%08x: UnmapNotify', e.window)
-        if e.send_event:
+    def handle_unmapnotify(self, unmapevent):
+        if unmapevent.send_event:
             # The UnmapNotify is because client called something like XWithdrawWindow or XIconifyWindow.
             # Unmap the window, but remove when the xserver sends another UnmapNotify message with send_event=False.
-            log.debug('0x%08x: Client requests unmap.. calling XUnmapWindow', e.window)
-            self.display.unmapwindow(e.window)
+            log.debug('0x%08x: Client requests unmap.. calling XUnmapWindow', unmapevent.window)
+            self.display.unmapwindow(unmapevent.window)
         else:
             # Only handle if the notify event not caused by a sub-structure redirect. See man XUnmapEvent
-            if e.event == e.window:
+            if unmapevent.event == unmapevent.window:
                 try:
-                    win = self.root.children[e.window]
+                    win = self.root.children[unmapevent.window]
                 except KeyError:
-                    log.error('0x%08x: UnmapRequest for unknown window!!!', e.window)
+                    log.error('0x%08x: UnmapRequest for unknown window!!!', unmapevent.window)
                 else:
                     self._desktop.withdrawwindow(win=win)
 
@@ -225,4 +164,4 @@ def main():
     except Exception as e:
         log.exception(e)
     else:
-        xevent.run(foot.display, foot.eventhandlers)
+        xevent.run(foot.xwatch, logfilename='/tmp/footwmerrors.log')
