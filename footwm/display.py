@@ -138,6 +138,7 @@ class Display:
         # UTF8 data type. This was originally an XFree86 extension.
         self.add_atom('UTF8_STRING')
         # From ICCCM.
+        self.add_atom('WM_CLIENT_MACHINE')
         self.add_atom('WM_STATE')
         self.add_atom('WM_PROTOCOLS')
         self.add_atom('WM_DELETE_WINDOW')
@@ -275,6 +276,14 @@ class Display:
         else:
             log.debug('0x%08x: XGetWindowAttributes failed', windowid)
             ret = None
+        return ret
+
+    def getwmclientmachine(self, window):
+        machines = self.gettextproperty(window, 'WM_CLIENT_MACHINE')
+        if machines:
+            ret = machines[0]
+        else:
+            ret = ''
         return ret
 
     def getwmname(self, window):

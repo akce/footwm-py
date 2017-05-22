@@ -118,10 +118,11 @@ class WindowApp(AppMixin):
         windows = self.client.getwindowlist()[self._offset:]
         columns = [listbox.ListColumn(name='res', label='Resource'),
                    listbox.ListColumn(name='cls', label='Class'),
+                   listbox.ListColumn(name='host', label='Host'),
                    listbox.ListColumn(name='title', label='Title'),
                    listbox.ListColumn(name='wid', label='Window', visible=False),
             ]
-        model = listbox.Model(rows=[{'res': w.resourcename, 'cls': w.resourceclass, 'title': w.name, 'wid': w.window} for w in windows], columns=columns)
+        model = listbox.Model(rows=[{'res': w.resourcename, 'cls': w.resourceclass, 'host': w.clientmachine, 'title': w.name, 'wid': w.window} for w in windows], columns=columns)
         aw = self.client.activewindow
         for i, w in enumerate(windows):
             if w.window == aw.window:

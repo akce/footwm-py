@@ -260,6 +260,12 @@ class WmWindowClientWindow(ewmh.WmWindowClientWindowMixin, Base):
 
     @property
     @utils.memoise
+    def clientmachine(self):
+        """ WM_CLIENT_MACHINE """
+        return self.display.getwmclientmachine(self)
+
+    @property
+    @utils.memoise
     def wmhints(self):
         return self.display.getwmhints(self)
 
