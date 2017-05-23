@@ -189,6 +189,7 @@ def main():
         gl['do'] = functools.partial
         config.loadconfig(getconfigfilename(args), gl, locals())
     try:
+        fk.xwatch.flush()
         xevent.run(fk.xwatch, logfilename='/tmp/footkeyserrors.log')
     finally:
         fk.clearkeymap()

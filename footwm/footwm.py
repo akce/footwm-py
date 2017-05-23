@@ -32,10 +32,7 @@ class Foot(object):
         # We are now the window manager - continue initialisation.
         log.debug('0x%08x: root %s', self.root.window, self.root)
         # XXX Should we remove WM_ICON_SIZE from root? In case an old WM installed it. See ICCCM 4.1.9
-        def xerrorhandler(display, xerrorevent):
-            log.error('X Error: %s', xerrorevent)
-            return 0
-        self.display.errorhandler = xerrorhandler
+        self.display.logerrors()
         self.xwatch = xevent.XWatch(self.display, self.root, self)
         self._desktop = desktop.Desktop(self.display, self.root)
         self._desktop.redraw()
@@ -164,4 +161,7 @@ def main():
     except Exception as e:
         log.exception(e)
     else:
+        # Flush ensures that our x config has been pushed to the server, and then we can receive events on the X socket.
+        # Required now since we don't wait on display.nextevent (which calls flush internally).
+        foot.xwatch.flush()
         xevent.run(foot.xwatch, logfilename='/tmp/footwmerrors.log')

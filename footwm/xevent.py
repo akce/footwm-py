@@ -4,6 +4,7 @@ Simple xevent generator.
 Copyright (c) 2016 Akce
 """
 from . import log as logger
+from . import selectloop
 from . import xlib
 
 log = logger.make(name=__name__)
@@ -13,7 +14,9 @@ def run(watcher, logfilename):
     elog = logger.make(name='applog', levelname='error', outfilename=logfilename)
     while True:
         try:
-            watcher.dispatchevent()
+            rs, _, _ = selectloop.select([watcher])
+            for r in rs:
+                r.dispatchevent()
         except Exception as e:
             elog.exception(e)
 
@@ -44,17 +47,22 @@ class XWatch:
         """ For select.select. """
         return self.display.fileno()
 
+    def flush(self):
+        self.display.flush()
+
     def dispatchevent(self):
-        event = self.display.nextevent
-        e = xlib.EventName(event.type)
-        log.debug('event: %s', e)
-        try:
-            handler = self.eventhandlers[e.value]
-            handler(event)
-        except KeyError:
-            log.warn('XWatch unhandled event %s', e)
-        except AttributeError:
-            log.warn('XWatch.callback unhandled event %s', e)
+        log.debug('dispatchevent called')
+        while self.display.pendingevents:
+            event = self.display.nextevent
+            e = xlib.EventName(event.type)
+            log.debug('dispatchevent: %s', e)
+            try:
+                handler = self.eventhandlers[e.value]
+                handler(event)
+            except KeyError:
+                log.warn('XWatch unhandled event %s', e)
+            except AttributeError:
+                log.warn('XWatch.callback unhandled event %s', e)
 
     def handle_clientmessage(self, event):
         e = event.xclient

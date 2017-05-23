@@ -8,21 +8,30 @@ import time
 # Local modules.
 from . import clientcmd
 from . import nestedarg
+from . import selectloop
+from . import xevent
+from . import xlib
 from .textui import keyconfig
 from .textui import listbox
 from .textui import msgwin
 from .textui import screen
 from .textui import util
 
+from . import log as logger
+
+log = logger.make(name=__name__)
+
 def xinit(displayname=None):
     display, root = clientcmd.makedisplayroot(displayname)
+    display.logerrors()
     client = clientcmd.ClientCommand(root)
     return client, display, root
 
 class AppMixin:
 
-    def __init__(self, client, skipfirst, msgduration=1.2):
+    def __init__(self, client, display, root, skipfirst, msgduration=1.2):
         self.client = client
+        self.xwatch = xevent.XWatch(display, root, self)
         self._offset = 1 if skipfirst else 0
         self._msgduration = msgduration
         self.scr = screen.Screen(self)
@@ -47,12 +56,31 @@ class AppMixin:
         self.eventmap = keymap['root']
 
     def run(self):
+        #log.debug('watch for property changes 0x%08x', xlib.InputEventMask.PropertyChange)
+        #root.manage(xlib.InputEventMask.PropertyChange)
+        try:
+            selfwin = self.client.root.children[int(os.environ['WINDOWID'])]
+        except KeyError:
+            selfwin = self.client.root.newchild(int(os.environ['WINDOWID']))
+        selfwin.manage(xlib.InputEventMask.FocusChange)
+        # flush is needed or else the server never sends us events. Normally it's called by nextevent, but we need to do
+        # it manually when using select.
+        self.xwatch.flush()
         self.scr.init()
         self._model.view = listbox.ListBox(model=self._model, parent=self.scr)
         self.scr.windows = [self._model.view]
         self.exitonempty()
         self.scr.draw()
-        self.scr.run()
+        # Handle both X and curses events.
+        while self.scr.running:
+            rs, _, _ = selectloop.select(reads=[self.scr, self.xwatch])
+            for r in rs:
+                r.dispatchevent()
+        self.scr.close()
+
+    def handle_focusout(self, event):
+        log.debug('focusout - stop app')
+        self.stop()
 
     def showmessage(self, content, title, parent=None):
         msg = msgwin.Message(lines=content, parent=parent or self.scr, title=title)
@@ -83,8 +111,8 @@ class AppMixin:
 
 class DesktopApp(AppMixin):
 
-    def __init__(self, client, skipfirst, msgduration=1.2):
-        super().__init__(client, skipfirst, msgduration)
+    def __init__(self, client, display, root, skipfirst, msgduration=1.2):
+        super().__init__(client, display, root, skipfirst, msgduration)
 
     def _makemodel(self):
         desktops = self.client.getdesktopnames()[self._offset:]
@@ -112,8 +140,8 @@ class DesktopApp(AppMixin):
 
 class WindowApp(AppMixin):
 
-    def __init__(self, client, skipfirst, msgduration=1.2):
-        super().__init__(client, skipfirst, msgduration)
+    def __init__(self, client, display, root, skipfirst, msgduration=1.2):
+        super().__init__(client, display, root, skipfirst, msgduration)
 
     def _makemodel(self):
         # Ignore window that houses footmenu.
@@ -155,9 +183,12 @@ class WindowApp(AppMixin):
         self.client.closewindow(window=wid)
         self.stop()
 
+    def handle_propertynotify(self, propertyevent, atomname):
+        log.debug('propertynotify %s', atomname)
+
 def windowmenu(args):
     client, display, root = xinit(displayname=args.displayname)
-    app = WindowApp(client, skipfirst=args.skipfirst, msgduration=args.msgduration)
+    app = WindowApp(client, display, root, skipfirst=args.skipfirst, msgduration=args.msgduration)
     try:
         app.run()
     finally:
@@ -165,7 +196,7 @@ def windowmenu(args):
 
 def desktopmenu(args):
     client, display, root = xinit(displayname=args.displayname)
-    app = DesktopApp(client, skipfirst=args.skipfirst, msgduration=args.msgduration)
+    app = DesktopApp(client, display, root, skipfirst=args.skipfirst, msgduration=args.msgduration)
     try:
         app.run()
     finally:
@@ -179,6 +210,7 @@ def parse_args():
     dispparser.add_argument('--escapedelay', default=25, type=int, help='Set curses escape delay')
 
     parser = argparse.ArgumentParser()
+    logger.addargs(parser)
     commands = nestedarg.NestedSubparser(parser.add_subparsers())
     with commands('windows', aliases=['w', 'win'], parents=[dispparser], help='windows only menu') as c:
         c.set_defaults(command=windowmenu)
@@ -188,5 +220,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    footmods = [m if m.startswith('footwm.') else 'footwm.{}'.format(m) for m in args.logmodules]
+    logger.startlogging(footmods, levelname=args.loglevel, outfilename=args.logfile)
     util.setescapedelay(args.escapedelay)
     args.command(args)

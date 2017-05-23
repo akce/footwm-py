@@ -189,8 +189,17 @@ xlib.XDefaultRootWindow.argtypes = display_p,
 xlib.XRootWindowOfScreen.restype = Window
 xlib.XRootWindowOfScreen.argtypes = screen_p,
 
+# int XConnectionNumber(Display*);
+xlib.XConnectionNumber.argtypes = display_p,
+
 # int XSync(Display *display, Bool discard);
 xlib.XSync.argtypes = display_p, Bool
+
+# int XPending(Display *display);
+xlib.XPending.argtypes = display_p,
+
+# int XFlush(Display *display);
+xlib.XFlush.argtypes = display_p,
 
 # int XMapWindow(Display *display, Window w);
 xlib.XMapWindow.argtypes = display_p, Window

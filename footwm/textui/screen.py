@@ -1,6 +1,7 @@
 # Python standard modules.
 import curses
 from curses import panel
+import sys
 import threading
 
 # Local modules.
@@ -82,14 +83,18 @@ class Screen(object):
 
     def run(self):
         try:
-            self.init()
             while self.running:
-                self.handle_input()
+                self.dispatchevent()
         finally:
             self.close()
 
-    def handle_input(self):
+    def fileno(self):
+        """ Allow for running in select loop. """
+        return sys.stdin.fileno()
+
+    def dispatchevent(self):
         k = self.stdscr.getch()
+        log.debug('dispatching key event: 0x%08x %d', k, k)
         self.app.on_user_event(k)
 
     def draw(self):

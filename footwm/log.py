@@ -27,9 +27,8 @@ def startlogging(modulenames, levelname='info', outfilename=None, logobjname='lo
     # don't stomp on any existing loggers. Must call stoplogging to
     # actually clear.
     h = makehandler(outfilename)
-    levelid = levelnametoint(levelname)
     for mod in modulenames:
-        logger = make(name=mod, level=levelid, handler=h)
+        logger = make(name=mod, levelname=levelname, handler=h)
         module = sys.modules[mod]
         setattr(module, logobjname, logger)
 
@@ -40,13 +39,16 @@ def stoplogging():
             # Replace with non-logging version.
             setattr(mod, 'log', make(name=name, handler=h))
 
-def make(name, levelname='error', formatter=None, outfilename=None):
+def make(name, levelname='error', formatter=None, handler=None, outfilename=None):
     """ Logging init. Default configuration is for extended traceback information (useful for server) logging. """
     finstance = formatter or logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
     log = logging.getLogger(name)
     levelid = levelnametoint(levelname)
     log.setLevel(levelid)
-    h = makehandler(outfilename)
+    if handler is None:
+        h = makehandler(outfilename)
+    else:
+        h = handler
     h.setLevel(levelid)
     h.setFormatter(finstance)
     # Python logging module doesn't exactly publish this, but handlers is a list of logging handlers.

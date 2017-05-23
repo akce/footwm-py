@@ -144,6 +144,10 @@ class Display:
         self.add_atom('WM_DELETE_WINDOW')
         self.add_atom('WM_TAKE_FOCUS')
 
+    def fileno(self):
+        """ Allow for use in select. """
+        return xlib.xlib.XConnectionNumber(self.xh)
+
     def add_atom(self, symbol, only_if_exists=False):
         self.atom[symbol] = xlib.xlib.XInternAtom(self.xh, bytes(symbol, 'utf8'), only_if_exists)
 
@@ -197,6 +201,13 @@ class Display:
         # Need to keep a reference to xerrorhandler_p object to stop it being gc'd.
         self._errorhandlerp = xlib.xerrorhandler_p(errorfunc)
         xlib.xlib.XSetErrorHandler(self._errorhandlerp)
+
+    def logerrors(self):
+        """ Provide a simple default error logger. """
+        def xerrorhandler(display, xerrorevent):
+            log.error('X Error: %s', xerrorevent)
+            return 0
+        self.errorhandler = xerrorhandler
 
     def free(self, xobject):
         xlib.xlib.XFree(xobject)
@@ -409,7 +420,7 @@ class Display:
         return ret
 
     def grabkey(self, keycode, modifiermask, grabwindow, ownerevents, pointermode, keyboardmode):
-        log.debug('0x%08x: XGrabKey keycode=%d modmask=0x%08x grabwindow=0x%08x', self.xh, keycode, modifiermask, grabwindow.window)
+        log.debug('0x%08x: XGrabKey keycode=%d modmask=0x%08x', grabwindow.window, keycode, modifiermask)
         xlib.xlib.XGrabKey(self.xh, keycode, modifiermask, grabwindow.window, ownerevents, pointermode, keyboardmode)
 
     def install(self, root, eventmask):
@@ -440,6 +451,10 @@ class Display:
     def nextevent(self):
         xlib.xlib.XNextEvent(self.xh, addr(self._nextevent))
         return self._nextevent
+
+    @property
+    def pendingevents(self):
+        return xlib.xlib.XPending(self.xh)
 
     def querytree(self, window):
         root_return = xlib.Window(0)
@@ -499,8 +514,12 @@ class Display:
         xlib.xlib.XChangeProperty(self.xh, window.window, WM_STATE, WM_STATE, 32, xlib.PropMode.Replace, data_p, long_length)
 
     def sync(self, discard=False):
-        log.debug('0x%08x: XSync discard=%s', self.xh, discard)
+        log.debug('XSync discard=%s', discard)
         xlib.xlib.XSync(self.xh, discard)
+
+    def flush(self):
+        log.debug('XFlush')
+        xlib.xlib.XFlush(self.xh)
 
     def strings_to_textprop(self, strings):
         """ Create a XTexpProperty object that encodes the list of
@@ -546,7 +565,7 @@ class Display:
         return lines
 
     def ungrabkey(self, keycode, modifiermask, grabwindow):
-        log.debug('0x%08x: XUngrabKey keycode=%d modmask=0x%0x grabwindow=0x%08x', self.xh, keycode, modifiermask, grabwindow.window)
+        log.debug('0x%08x: XUngrabKey keycode=%d modmask=0x%0x', grabwindow.window, keycode, modifiermask)
         xlib.xlib.XUngrabKey(self.xh, keycode, modifiermask, grabwindow.window)
 
     def unmapwindow(self, windowid):
