@@ -4,15 +4,21 @@ FootKeys module.
 Copyright (c) 2016 Akce
 """
 # Python standard modules.
+import argparse
 import functools
 import itertools
 import operator
+import os
+import signal
+import sys
 
 # Local modules.
 from . import clientcmd
 from . import config
 from . import log as logger
 from . import kb
+from . import nestedarg
+from . import signalevent
 from . import xevent
 from . import xlib
 
@@ -81,7 +87,7 @@ class KeyBuilder:
 
 class FootKeys:
 
-    def __init__(self, displayname=None):
+    def __init__(self, displayname=None, configfilename=None):
         """
         FootKeys._handle_keypress() will apply requiremods & ignoremods to all grabbed keypresses.
         requiremods and ignoremods must be a set of footwm.xlib.KeyModifierMask values.
@@ -89,11 +95,15 @@ class FootKeys:
         All ignoremods values are all masked out and ignored in keypress events.
         """
         self.display, self.root = clientcmd.makedisplayroot(displayname)
+        self.configfilename = configfilename
         def xerrorhandler(display, xerrorevent):
             log.error('X Error: %s', xerrorevent)
             return 0
         self.display.errorhandler = xerrorhandler
         self.xwatch = xevent.XWatch(self.display, self.root, self)
+        self.sigwatch = signalevent.SignalsWatch(self)
+        signal.signal(signal.SIGUSR1, lambda x, y: None)
+        self._keycodeactions = {}
 
     def config(self):
         # Creating the KeyBuilder as a separate object so that the only way to
@@ -102,21 +112,37 @@ class FootKeys:
         # have been made.
         return KeyBuilder(self)
 
+    def loadconfig(self):
+        log.info('Loading config from %s', self.configfilename)
+        with self.config() as keyconfig:
+            # Create a client object and add it into the configs
+            # namespace. One of these is handy and would be used by every
+            # config.
+            gl = globals().copy()
+            gl['client'] = clientcmd.ClientCommand(self.root)
+            gl['akce'] = functools.partial
+            gl['do'] = functools.partial
+            config.loadconfig(self.configfilename, gl, locals())
+
     def _install(self, keysymactions=None, requiremods=None, ignoremods=None):
         self._keysymactions = keysymactions
         self._requiremods = requiremods
         self._ignoremods = ignoremods
         self._rebuild()
 
+    def uninstall(self):
+        self.display.ungrabkey(xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, self.root)
+
     def _rebuild(self):
         # Reset the keycode action settings, and ungrab from Xserver.
-        self.display.ungrabkey(xlib.AnyKey, xlib.GrabKeyModifierMask.AnyModifier, self.root)
+        self.uninstall()
         self._keycodeactions = []
         # Recreate keyboard settings, this loads the keysym to keycode bindings.
         self.keyboard = kb.Keyboard(self.display)
         # Convert the keysym action objects to xserver keycodes as the xkeyboard events are given to us as keycodes.
         self._keycodeactions = self._makekeycodes()
         self._installkeycodes()
+        self.display.flush()
 
     def _makekeycodes(self):
         keycodes = {}
@@ -147,6 +173,7 @@ class FootKeys:
         """ User has pressed a key that we've grabbed. """
         # Retrieve key action and call.
         keycombo = (e.keycode, e.state.value)
+        log.debug('0x%08x: handle_keypress: %s', e.window, keycombo)
         if keycombo in self._keycodeactions:
             keyaction = self._keycodeactions[keycombo]
             keyaction.action.action()
@@ -157,39 +184,61 @@ class FootKeys:
         """ X server has had a keyboard mapping changed. Update our keyboard layer. """
         self._rebuild()
 
-def getconfigfilename(args):
-    cf = None
+    def handle_signal(self, signum):
+        log.debug('handle_signal called')
+        if signum == signal.SIGUSR1:
+            self.loadconfig()
+            ret = True
+        else:
+            ret = False
+        return ret
+
+def getconfigfilename(configfile=None):
+    return configfile or config.getconfigwithfallback('footkeysconfig.py')
+
+def startkeys(args):
+    pid = config.getpid(args.pidfile)
+    if config.processexists(pid):
+        log.error("Exiting: footkeys instance already running. pid=%d pidfile=%s", pid, args.pidfile)
+        sys.exit(1)
+    config.writepid(args.pidfile)
+    fk = FootKeys(displayname=args.display, configfilename=args.configfile)
+    fk.loadconfig()
     try:
-        if args.configfile:
-            cf = args.configfile
-    except AttributeError:
-        pass
-    if cf is None:
-        cf = config.getconfigwithfallback('footkeysconfig.py')
-    return cf
+        fk.xwatch.flush()
+        xevent.run([fk.xwatch, fk.sigwatch], logfilename='/tmp/footkeyserrors.log')
+    finally:
+        fk.uninstall()
+
+def sendreloadsignal(args):
+    pid = config.getpid(args.pidfile)
+    try:
+        os.kill(pid, signal.SIGUSR1)
+    except (TypeError, ProcessLookupError):
+        log.error("Footkeys process %s does not exist..", pid)
+        retcode = 1
+    except PermissionError:
+        # Exists, but we can't write to the process.
+        log.error("Footkeys process %d exists, but permission to signal it is denied..", pid)
+        retcode = 2
+    else:
+        log.info("Reload signal sent to process %d", pid)
+        retcode = 0
+    sys.exit(retcode)
 
 def parseargs():
-    import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--configfile', help='Full path to configuration file. default: %(default)s')
+    parser.add_argument('--configfile', default=getconfigfilename(), help='Full path to configuration file. default: %(default)s')
+    parser.add_argument('--pidfile', help='Full path to pid file. default: %(default)s')
     parser.add_argument('--display', help='X display name. eg, :0.1. default: %(default)s')
+    commands = nestedarg.NestedSubparser(parser.add_subparsers())
+    with commands('start', aliases=['s'], help='run a footkeys instance.') as c:
+        c.set_defaults(command=startkeys)
+    with commands('reload', aliases=['r'], help='reload configuration') as c:
+        c.set_defaults(command=sendreloadsignal)
     args = parser.parse_args()
     return args
 
 def main():
     args = parseargs()
-    fk = FootKeys(args.display)
-    with fk.config() as keyconfig:
-        # Create a client object and add it into the configs
-        # namespace. One of these is handy and would be used by every
-        # config.
-        gl = globals().copy()
-        gl['client'] = clientcmd.ClientCommand(fk.root)
-        gl['akce'] = functools.partial
-        gl['do'] = functools.partial
-        config.loadconfig(getconfigfilename(args), gl, locals())
-    try:
-        fk.xwatch.flush()
-        xevent.run(fk.xwatch, logfilename='/tmp/footkeyserrors.log')
-    finally:
-        fk.clearkeymap()
+    args.command(args)

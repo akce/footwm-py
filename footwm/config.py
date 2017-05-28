@@ -30,3 +30,34 @@ def loadconfig(filename, globals_=None, locals_=None):
     with open(filename) as f:
         codeobj = compile(f.read(), filename, 'exec')
         exec(codeobj, gs, ls)
+
+def getpidfilename(basename):
+    return os.path.join(os.environ['HOME'], '.foot', '{}.pid'.format(basename))
+
+def getpid(basename):
+    try:
+        with open(getpidfilename(basename)) as f:
+            pid = int(f.read())
+    except (FileNotFoundError, ValueError):
+        pid = None
+    return pid
+
+def writepid(basename, pid=None):
+    pidstr = str(pid or os.getpid())
+    with open(getpidfilename(basename), 'w') as f:
+        f.write(pidstr)
+
+def processexists(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        exists = False
+    except PermissionError:
+        # Exists, but we can't write to the process.
+        exists = True
+    except TypeError:
+        # pid is not a valid input. It's most likely a None.
+        exists = False
+    else:
+        exists = True
+    return exists

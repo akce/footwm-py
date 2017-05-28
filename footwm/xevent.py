@@ -9,12 +9,12 @@ from . import xlib
 
 log = logger.make(name=__name__)
 
-def run(watcher, logfilename):
+def run(watchers, logfilename):
     # Setup a local logger that is always available so that we can catch unhandled exceptions.
     elog = logger.make(name='applog', levelname='error', outfilename=logfilename)
     while True:
         try:
-            rs, _, _ = selectloop.select([watcher])
+            rs, _, _ = selectloop.select(watchers)
             for r in rs:
                 r.dispatchevent()
         except Exception as e:
