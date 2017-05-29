@@ -59,6 +59,7 @@ class AppMixin:
             self.eventmap = collections.ChainMap(self.menu[keymapname], self.navkeys)
             self.currmenu = keymapname
             self._model.rows = self._makerows()
+            self._model.view.updatedisplay()
 
     def on_user_event(self, kid):
         try:
@@ -102,7 +103,7 @@ class AppMenu(AppMixin):
             pass
 
     def editend(self, model, run, command):
-        data = dict([(k, v) for k, v in zip([c.name for c in model.columns if c.visible], model.rows[0].cells(model.columns, visibleonly=True))])
+        data = dict([(k, v) for k, v in zip([c.name for c in model.columns if c.visible], model.displayrows[0].cells(model.columns, visibleonly=True))])
         # HACK: Assumes that run is a DoAfter object, so we have to:
         # -> run(command) :: DoAfter.__call__(command) -> doafterfunc
         # -> doafterfunc()

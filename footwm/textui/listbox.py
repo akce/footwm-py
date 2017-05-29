@@ -15,9 +15,6 @@ class Model:
     """ The data that the listbox will display. """
 
     def __init__(self, showindex=True, showheader=True, rows=None, columns=None):
-        # The model always inserts its own housekeeping columns.
-        # unique key id.
-        self._uidcolumn = ListColumn(name='_uid', label='UID', visible=False)
         # Store the original columns and rows before any filtering.
         self.rows = rows
         self.columns = columns
@@ -72,6 +69,8 @@ class Model:
             self.editeventmap[cascii.NL] = functools.partial(self.editend, endfunc)
             if cancelfunc is not None:
                 self.editeventmap[cascii.ESC] = cancelfunc
+        # HACK For now editstart is only ever used before view.draw is called. So force make self._rows first.
+        self.makedisplayrows(0, len(self.rows))
         self._editcell = self._rows[rownum].edit(columnname, validator)
         # Turn on the cursor in the view.
         # HACK! curses.curs_set(2) call doesn't work here for some reason. Resort to using the escape code directly.
@@ -96,21 +95,21 @@ class Model:
 
     @columns.setter
     def columns(self, cols):
-        self._columns = [self._uidcolumn] + (cols or [])
+        self._columns = cols or []
 
     @property
-    def rows(self):
+    def displayrows(self):
         return self._rows
 
-    @rows.setter
-    def rows(self, rowdictlist):
+    def makedisplayrows(self, start, count):
         """ Note that rows are converted to an internal row representation. """
-        uidname = self._uidcolumn.name
-        self._rows = [ListRow([[uidname, CellStatic(uid)]] + [[n, CellStatic(c)] for n, c in rowdict.items()]) for uid, rowdict in enumerate(rowdictlist)]
+        colmap = {col.name: col for col in self._columns}
+        self._rows = [ListRow([[n, CellStatic(c, colmap[n].renderer)] for n, c in rowdict.items()]) for rowdict in itertools.islice(self.rows, start, start + count)]
+        return self._rows
 
     @property
     def selected(self):
-        return self.rows[self.selectedindex].data
+        return self.rows[self.selectedindex]
 
     def up(self):
         self.view.up()
@@ -124,20 +123,21 @@ class Model:
     def pagedown(self):
         self.view.pagedown()
 
-    def calcmaxwidths(self, start, stop, includeheader=False):
+    def calcmaxwidths(self, includeheader=False):
         maxwidths = [len(col.label) if includeheader else 0 for col in self.columns if col.visible]
-        for row in itertools.islice(self.rows, start, stop):
-            for j, cell in enumerate(row.cells(self.columns, visibleonly=True)):
-                maxwidths[j] = max(maxwidths[j], len(cell))
+        for row in self._rows:
+            for i, cell in enumerate(row.cells(self.columns, visibleonly=True)):
+                maxwidths[i] = max(maxwidths[i], len(cell))
         return maxwidths
 
 class ListColumn:
     """ Column display specification. """
 
-    def __init__(self, name, visible=True, label=None):
+    def __init__(self, name, visible=True, label=None, renderer=str):
         self.name = name
         self.visible = visible
         self.label = label or ""
+        self.renderer = renderer
 
 def alwaystrue(*args):
     return True
@@ -149,6 +149,7 @@ class ListRow:
 
     def __init__(self, iterable):
         self.data = dict(iterable)
+        self.visible = True
 
     def cells(self, columns, visibleonly=False):
         pred = isvisible if visibleonly else alwaystrue
@@ -159,18 +160,29 @@ class ListRow:
 
     def edit(self, columnname, validator):
         cell = self.data[columnname]
-        editcell = CellEdit(cell, columnname, validator=validator)
+        editcell = CellEdit(str(cell), columnname, validator=validator)
         self.data[columnname] = editcell
         return editcell
 
-class CellStatic(str):
+class CellStatic:
+
+    def __init__(self, contents, renderer=str):
+        self.data = contents
+        self._renderer = renderer
+        self._rendered = renderer(self.data)
 
     def draw(self, window, x, y, maxw, textcolour):
-        text = util.clip_end(self, maxw)
+        text = util.clip_end(self._rendered, maxw)
         # addstr seems to move the cursor, so put it back once we finish writing.
         cy, cx = window.getyx()
         window.addstr(y, x, text, textcolour)
         window.move(cy, cx)
+
+    def __len__(self):
+        return len(self._rendered)
+
+    def __str__(self):
+        return self._rendered
 
 class CellEdit:
 
@@ -223,12 +235,17 @@ class ListBox(common.PanelWindowMixin):
     def __init__(self, model, parent, geom=None):
         self.model = model
         self._viewport_index = 0
+        self._borders = 2
         super().__init__(parent, geom)
         self._update_scroll()
 
     def _update_scroll(self):
         # Ensure _scroll is at least 1, no point having a zero scroll value.
         self._scroll = max(int(self._geom.h / 2), 1)
+
+    @property
+    def headerlines(self):
+        return 2 if self.model.drawheader else 0
 
     def resize(self, geom):
         super().resize(geom)
@@ -242,14 +259,11 @@ class ListBox(common.PanelWindowMixin):
         self._win.erase()
         self._win.box()
         geom = self._geom
-        borders = 2
-        headerlines = 2 if self.model.drawheader else 0
-        maxrows = geom.h - borders - headerlines
-        # Get our slice of display items, then display them.
-        displayslice = slice(self._viewport_index, self._viewport_index + maxrows)
+        headerlines = self.headerlines
+        displayrows = self.model.displayrows
         ## Calculate the max width of each column.
         # Note that the column headers are included only when there's something to display, ie drawheader is True.
-        maxwidths = self.model.calcmaxwidths(displayslice.start, displayslice.stop, includeheader=headerlines > 0)
+        maxwidths = self.model.calcmaxwidths(includeheader=headerlines > 0)
 
         ## Draw the verticle column divider lines.
         xbase = 2
@@ -275,7 +289,7 @@ class ListBox(common.PanelWindowMixin):
             ybase += 1
             self._win.addch(ybase, geom.x, curses.ACS_LTEE)
             xpos = 1
-            self._win.hline(ybase, xpos, curses.ACS_HLINE, geom.w - borders)
+            self._win.hline(ybase, xpos, curses.ACS_HLINE, geom.w - self._borders)
             xpos = xbase
             for rm in maxwidths[:-1]:
                 xpos += rm + 1
@@ -286,7 +300,7 @@ class ListBox(common.PanelWindowMixin):
         ## Draw row contents.
         ybase += 1
         currentindex = self.model.selectedindex - self._viewport_index
-        for i, row in enumerate(self.model.rows[displayslice]):
+        for i, row in enumerate(displayrows):
             if i == currentindex:
                 textcolour = curses.color_pair(0) | curses.A_BOLD
             else:
@@ -319,6 +333,9 @@ class ListBox(common.PanelWindowMixin):
         self.model.selectedindex = max(self.model.selectedindex - count, 0)
         self._update_viewport()
 
+    def updatedisplay(self):
+        self.model.makedisplayrows(self._viewport_index, self._geom.h - self._borders - self.headerlines)
+
     def _update_viewport(self):
         """ Calculates _viewport_index position w/respect to screen LINES. Scroll the viewport if needed. """
         # Is the selected item visible on screen?
@@ -334,4 +351,5 @@ class ListBox(common.PanelWindowMixin):
         elif self.model.selectedindex >= (self._viewport_index + geom.h):
             # Selected item is below viewport+pageheight, try and centre the item on screen.
             self._viewport_index = self.model.selectedindex - offset
+        self.updatedisplay()
         log.debug('update_viewport new listbox=%s _selected_index=%s _viewport_index=%s _scroll=%s', geom, self.model.selectedindex, self._viewport_index, self._scroll)

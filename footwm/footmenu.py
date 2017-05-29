@@ -152,13 +152,13 @@ class WindowApp(AppMixin):
         currentset = frozenset([selfwin, currentwin])
         windows = [w for w in allwindows if w not in currentset][self._offset:]
         columns = [
-            listbox.ListColumn(name='wid', label='Window', visible=False),
+            listbox.ListColumn(name='win', label='Window', visible=True, renderer=lambda x: '0x{:08x}'.format(x.window)),
             listbox.ListColumn(name='res', label='Resource'),
             listbox.ListColumn(name='cls', label='Class'),
             listbox.ListColumn(name='host', label='Host'),
             listbox.ListColumn(name='title', label='Title'),
             ]
-        model = listbox.Model(rows=[{'res': w.resourcename, 'cls': w.resourceclass, 'host': w.clientmachine, 'title': w.name, 'wid': w.window} for w in windows], columns=columns)
+        model = listbox.Model(rows=[{'res': w.resourcename, 'cls': w.resourceclass, 'host': w.clientmachine, 'title': w.name, 'win': w} for w in windows], columns=columns)
         aw = self.client.activewindow
         for i, w in enumerate(windows):
             if w.window == aw.window:
@@ -171,15 +171,15 @@ class WindowApp(AppMixin):
     def activateselection(self):
         row = self._model.selected
         winname = row['title']
-        wid = int(row['wid'])
+        win = row['win']
         self.showmessage(content=[winname], title='Activating')
-        self.client.activatewindow(window=wid)
+        self.client.activatewindow(window=win.window)
         self.scr.draw()
         self.stop()
 
     def closeselection(self):
         row = self._model.selected
-        wid = row['wid']
+        wid = row['win'].window
         self.client.closewindow(window=wid)
         self.stop()
 
