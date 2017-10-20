@@ -276,6 +276,8 @@ class ListBox(common.PanelWindowMixin):
             self._win.vline(ybase + 1, xpos, curses.ACS_VLINE, geom.h - ybase - 1)
             self._win.addch(geom.h - 1, xpos, curses.ACS_BTEE)
             xpos += 2
+        # lastxpos, used to clip the last column (see below).
+        lastxpos = xpos
 
         ## Draw column headers.
         if headerlines > 0:
@@ -300,13 +302,15 @@ class ListBox(common.PanelWindowMixin):
         ## Draw row contents.
         ybase += 1
         currentindex = self.model.selectedindex - self._viewport_index
+        # Clip the end width (if necessary).
+        clippedwidths = maxwidths[:-1] + [geom.w - 1 - lastxpos]
         for i, row in enumerate(displayrows):
             if i == currentindex:
                 textcolour = curses.color_pair(0) | curses.A_BOLD
             else:
                 textcolour = curses.color_pair(0)
             xpos = xbase
-            for rowmax, cell in zip(maxwidths, row.cells(self.model.columns, visibleonly=True)):
+            for rowmax, cell in zip(clippedwidths, row.cells(self.model.columns, visibleonly=True)):
                 cell.draw(self._win, x=xpos, y=ybase, maxw=rowmax, textcolour=textcolour)
                 xpos += rowmax + 3
             ybase += 1
