@@ -198,8 +198,8 @@ def getconfigfilename(configfile=None):
 
 def startkeys(args):
     pid = config.getpid(args.pidfile)
-    if config.processexists(pid):
-        log.error("Exiting: footkeys instance already running. pid=%d pidfile=%s", pid, args.pidfile)
+    if config.processexists(pid, procname=args.procname):
+        log.error("Exiting: %s already running. pid=%d pidfile=%s", args.procname, pid, args.pidfile)
         sys.exit(1)
     config.writepid(args.pidfile)
     fk = FootKeys(displayname=args.display, configfilename=args.configfile)
@@ -229,11 +229,11 @@ def sendreloadsignal(args):
 def parseargs():
     parser = argparse.ArgumentParser()
     parser.add_argument('--configfile', default=getconfigfilename(), help='Full path to configuration file. default: %(default)s')
-    parser.add_argument('--pidfile', help='Full path to pid file. default: %(default)s')
+    parser.add_argument('--pidfile', default=config.getpidfilename(parser.prog), help='Full path to pid file. default: %(default)s')
     parser.add_argument('--display', help='X display name. eg, :0.1. default: %(default)s')
     commands = nestedarg.NestedSubparser(parser.add_subparsers())
     with commands('start', aliases=['s'], help='run a footkeys instance.') as c:
-        c.set_defaults(command=startkeys)
+        c.set_defaults(command=startkeys, procname=parser.prog)
     with commands('reload', aliases=['r'], help='reload configuration') as c:
         c.set_defaults(command=sendreloadsignal)
     args = parser.parse_args()

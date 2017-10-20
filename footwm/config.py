@@ -2,6 +2,7 @@
 
 # Python standard modules.
 import os
+import subprocess
 
 def getuserconfig(basename):
     """ User config by default is in ~/.foot/ """
@@ -34,9 +35,9 @@ def loadconfig(filename, globals_=None, locals_=None):
 def getpidfilename(basename):
     return os.path.join(os.environ['HOME'], '.foot', '{}.pid'.format(basename))
 
-def getpid(basename):
+def getpid(filename):
     try:
-        with open(getpidfilename(basename)) as f:
+        with open(filename) as f:
             pid = int(f.read())
     except (FileNotFoundError, ValueError):
         pid = None
@@ -47,7 +48,8 @@ def writepid(basename, pid=None):
     with open(getpidfilename(basename), 'w') as f:
         f.write(pidstr)
 
-def processexists(pid):
+def processexists(pid, procname):
+    """ True if pid exists and is the same as our process name. """
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -59,5 +61,14 @@ def processexists(pid):
         # pid is not a valid input. It's most likely a None.
         exists = False
     else:
-        exists = True
+        # PID exists, let's see if the process name is the same as ours.
+        # Use ps as the most portable way of extracting the process name.
+        # The ps args only prints the command for pid and suppresses the header line.
+        # See 'man ps' for why.
+        out = subprocess.run(['ps', '-o', 'args=', '-p', str(pid)], stdout=subprocess.PIPE)
+        # The output will look like:
+        # python3 /home/user/footwm/bin/footkeys start (python3.6)
+        # The gymnastics below will extract the 'footkeys' portion.
+        outproc = str(os.path.split(out.stdout.rstrip().split()[1])[1], 'utf8')
+        exists = outproc == procname
     return exists
