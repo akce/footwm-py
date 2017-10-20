@@ -43,9 +43,9 @@ def getpid(filename):
         pid = None
     return pid
 
-def writepid(basename, pid=None):
+def writepid(filename, pid=None):
     pidstr = str(pid or os.getpid())
-    with open(getpidfilename(basename), 'w') as f:
+    with open(filename, 'w') as f:
         f.write(pidstr)
 
 def processexists(pid, procname):
