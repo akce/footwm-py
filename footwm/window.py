@@ -51,13 +51,22 @@ log = xlog.make(name=__name__)
 class WindowError(Exception):
     pass
 
-def centregeom(geom, availablegeom):
+def centregeom(geom, availablegeom, sizehints):
     """ A new geometry such that the x,y coords centre the geom.width/height in the availablegeom. """
+    # Sizehints might have some sort of geom setting, so prefer that to current geom.
+    try:
+        idealgeom = sizehints.mingeom
+    except AttributeError:
+        try:
+            idealgeom = sizehints.maxgeom
+        except AttributeError:
+            idealgeom = geom
+
     # Width / x
-    x = max(int((availablegeom.w - geom.w) / 2), 0)
+    x = max(int((availablegeom.w - idealgeom.w) / 2), 0)
     # Height / y
-    y = max(int((availablegeom.h - geom.h) / 2), 0)
-    return display.Geometry(display.Geomtuple(x, y, geom.w, geom.h))
+    y = max(int((availablegeom.h - idealgeom.h) / 2), 0)
+    return display.Geometry(display.Geomtuple(x, y, idealgeom.w, idealgeom.h))
 
 def fixedgeom(currentgeom, availablegeom, sizehints):
     try:
@@ -77,7 +86,7 @@ def honourablemaxsizer(currentgeom, availablegeom, sizehints):
     size = None
     if sizehints and sizehints.flags.value == xlib.SizeFlags.PSize:
         # Seems to be set when the window is already at the correct size.
-        size = centregeom(currentgeom, availablegeom)
+        size = centregeom(currentgeom, availablegeom, sizehints)
     if size is None:
         # Check for windows that can't be resized, ie, min == max.
         size = fixedgeom(currentgeom, availablegeom, sizehints)
@@ -93,7 +102,7 @@ def brutalmaxsizer(currentgeom, availablegeom, sizehints):
 
 def transientsizer(windowgeom, rootgeom, sizehints):
     """ Transient sizer centres position in the available geometry but width/height are unchanged from sizehints. """
-    return centregeom(windowgeom, rootgeom)
+    return centregeom(windowgeom, rootgeom, sizehints)
 
 class Base:
 

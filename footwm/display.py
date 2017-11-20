@@ -92,6 +92,7 @@ class SizeHints:
         """ Take the xlib/ctypes csizehints data structure and convert to our own use.
         See ICCCM 4.1.2.3 WM_NORMAL_HINTS Property for info on csizehints. """
         self.flags = xlib.SizeFlags(csizehints.flags.value)
+        values = ['flags={}'.format(str(self.flags))]
         if self.flags.value & (xlib.SizeFlags.USPosition | xlib.SizeFlags.USSize):
             # User specified position & size is not supported yet.
             pass
@@ -103,22 +104,27 @@ class SizeHints:
         if self.flags.value & xlib.SizeFlags.PBaseSize:
             # Check base size first, it's used in preference to min-size.
             self.mingeom = Geometry(Geomtuple(0, 0, csizehints.base_width, csizehints.base_height))
+            values.append('basegeom={}'.format(str(self.mingeom)))
         elif self.flags.value & xlib.SizeFlags.PMinSize:
             self.mingeom = Geometry(Geomtuple(0, 0, csizehints.min_width, csizehints.min_height))
+            values.append('mingeom={}'.format(str(self.mingeom)))
         if self.flags.value & xlib.SizeFlags.PMaxSize:
             self.maxgeom = Geometry(Geomtuple(0, 0, csizehints.max_width, csizehints.max_height))
+            values.append('maxgeom={}'.format(str(self.maxgeom)))
         if self.flags.value & xlib.SizeFlags.PResizeInc:
             self.widthinc = csizehints.width_inc
             self.heightinc = csizehints.height_inc
+            values.append('widthinc={} heightinc={}'.format(self.widthinc, self.heightinc))
         if self.flags.value & xlib.SizeFlags.PAspect:
             # TODO Unsupported.
             pass
         if self.flags.value & xlib.SizeFlags.PWinGravity:
             # TODO Unsupported.
             pass
+        self._string = '{}({})'.format(self.__class__.__name__, ', '.join(values))
 
     def __str__(self):
-        return '{}({})'.format(self.__class__.__name__, 'flags={}'.format(str(self.flags)))
+        return self._string
 
 class Display:
 
