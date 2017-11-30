@@ -65,7 +65,7 @@ def processexists(pid, procname):
         # Use ps as the most portable way of extracting the process name.
         # The ps args only prints the command for pid and suppresses the header line.
         # See 'man ps' for why.
-        out = subprocess.run(['ps', '-o', 'args=', '-p', str(pid)], stdout=subprocess.PIPE)
+        out = subprocess.check_output(['ps', '-o', 'args=', '-p', str(pid)])
         # The output will look like:
         # python3 /home/user/footwm/bin/footkeys start (python3.6)
         # The gymnastics below will extract the 'footkeys' portion.
