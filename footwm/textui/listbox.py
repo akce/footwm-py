@@ -303,7 +303,7 @@ class ListBox(common.PanelWindowMixin):
         ybase += 1
         currentindex = self.model.selectedindex - self._viewport_index
         # Clip the end width (if necessary).
-        clippedwidths = maxwidths[:-1] + [geom.w - 1 - lastxpos]
+        clippedwidths = maxwidths[:-1] + [geom.w - 2 - lastxpos]
         for i, row in enumerate(displayrows):
             if i == currentindex:
                 textcolour = curses.color_pair(0) | curses.A_BOLD
