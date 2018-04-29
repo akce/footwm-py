@@ -1,6 +1,7 @@
 from .footrun import run
 
-TERMINAL = 'xterm -tn xterm-256color'
+#TERMINAL = 'xterm -tn xterm-256color'
+TERMINAL = 'urxvtc'
 
 # Order windows using most recently used.
 stacking = True
