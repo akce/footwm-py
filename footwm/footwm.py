@@ -164,4 +164,4 @@ def main():
         # Flush ensures that our x config has been pushed to the server, and then we can receive events on the X socket.
         # Required now since we don't wait on display.nextevent (which calls flush internally).
         foot.xwatch.flush()
-        xevent.run([foot.xwatch], logfilename='/tmp/footwmerrors.log')
+        xevent.run([foot.xwatch], logfilename='footwmerrors.log')

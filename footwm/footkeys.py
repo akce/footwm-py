@@ -206,7 +206,7 @@ def startkeys(args):
     fk.loadconfig()
     try:
         fk.xwatch.flush()
-        xevent.run([fk.xwatch, fk.sigwatch], logfilename='/tmp/footkeyserrors.log')
+        xevent.run([fk.xwatch, fk.sigwatch], logfilename='footkeyserrors.log')
     finally:
         fk.uninstall()
 
