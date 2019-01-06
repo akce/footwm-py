@@ -69,6 +69,6 @@ def processexists(pid, procname):
         # The output will look like:
         # python3 /home/user/footwm/bin/footkeys start (python3.6)
         # The gymnastics below will extract the 'footkeys' portion.
-        outproc = str(os.path.split(out.stdout.rstrip().split()[1])[1], 'utf8')
+        outproc = str(os.path.split(out.rstrip().split()[1])[1], 'utf8')
         exists = outproc == procname
     return exists
