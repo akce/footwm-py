@@ -9,6 +9,7 @@ import os
 import socket
 import stat
 import sys
+import time
 
 # Local modules.
 from . import config
@@ -64,16 +65,31 @@ def daemonstart(sockname):
 def clidaemonstart(args):
     daemonstart(sockname=args.sockname)
 
-def run(cmdline, address=None):
+def run(cmdline, address=None, retrycount=0, delay=5):
     if address is None:
         address = config.getuserconfig(SOCKNAME)
     remote = selectloop.StreamClient(address=address, family=socket.AF_UNIX)
-    remote.connect()
+    def connectretry():
+        nonlocal retrycount
+        remote.connect()
+        if remote.connected:
+            # Don't retry if we're connected.
+            doretry = False
+        else:
+            doretry = retrycount > 0
+            retrycount -= 1
+        return doretry
+    while connectretry():
+        print('Could not connect to footrun service @{}. Waiting {}s. {} retries left.'.format(address, delay, retrycount + 1), file=sys.stderr)
+        time.sleep(delay)
+    if remote.connected is False:
+        print('Could not connect to footrun service @{}. Giving up.'.format(address), file=sys.stderr)
+        sys.exit(1)
     runner = jsonrpc.RemoteObject(['run'], postfunc=remote.post)
     runner.run(cmdline=cmdline)
 
 def clirun(args):
-    run(address=args.sockname, cmdline=' '.join('"{}"'.format(x) for x in args.args))
+    run(address=args.sockname, cmdline=' '.join('"{}"'.format(x) for x in args.args), retrycount=args.max_retries, delay=args.retry_delay)
 
 def makeargparser():
     parser = argparse.ArgumentParser()
@@ -89,6 +105,8 @@ def makeargparser():
     with commands('run', aliases=['e', 'r'], parents=[connparser], help='run (execute) a command') as c:
         c.set_defaults(command=clirun)
         # TODO specify command output logging options.
+        c.add_argument('--max-retries', default=5, type=int, help='maximum number of server connection attempts. Default: %(default)s')
+        c.add_argument('--retry-delay', default=5, type=int, help='delay (in seconds) between retrying connection. Default: %(default)s')
         c.add_argument('args', nargs='+', help='command line arguments of command')
     return parser
 
