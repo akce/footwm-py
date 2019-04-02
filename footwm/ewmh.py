@@ -98,7 +98,9 @@ class ClientRootMixin(Base):
     @property
     def clientliststacking(self):
         """ _NET_CLIENT_LIST_STACKING """
-        return self._getwindows('_NET_CLIENT_LIST_STACKING')
+        # This atom stores stacking order from bottom to top, but for code it's easier
+        # to work with top window at index 0 so internally work with a reversed list.
+        return list(reversed(self._getwindows('_NET_CLIENT_LIST_STACKING')))
 
     def _getwindows(self, propname):
         wids = self.display.getpropertywindowids(self, propname)
@@ -215,7 +217,9 @@ class WmRootMixin(Base):
     @clientliststacking.setter
     def clientliststacking(self, windows):
         """ _NET_CLIENT_LIST_STACKING """
-        self._setwindows(windows, '_NET_CLIENT_LIST_STACKING')
+        # This atom stores stacking order from bottom to top, but for code it's easier
+        # to work with top window at index 0 so internally work with a reversed list.
+        self._setwindows(list(reversed(windows)), '_NET_CLIENT_LIST_STACKING')
 
     @property
     def currentdesktop(self):
